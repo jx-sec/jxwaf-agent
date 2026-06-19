@@ -1,7 +1,0 @@
-{
-  "stat_time": 60,
-  "ip_request_threshold": 100,
-  "high_freq_ip_threshold": 1000,
-  "protect_time": 600,
-  "bot_check_type": "auto"
-}
