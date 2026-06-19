@@ -1,5 +1,5 @@
 --[[
-JxWAF 节点规则检测核心逻辑（access 阶段）
+JXWAF 节点规则检测核心逻辑（access 阶段）
 
 本文件整理自节点源码 waf.lua 中的 Web 防护规则与流量防护规则检测函数，
 供 AI 深度排查时参考。实际运行环境为 OpenResty + ngx.lua。

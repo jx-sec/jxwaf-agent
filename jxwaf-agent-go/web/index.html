@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JXWAF Agent</title>
+    <script src="/vendor/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css">
+    <style>
+        [v-cloak] { display: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-app: #f7f7f8;
+            --bg-sidebar: #ffffff;
+            --bg-menu: #1a1a2e;
+            --bg-chat: #ffffff;
+            --bg-card: #ffffff;
+            --bg-code: #1e1e2e;
+            --bg-input: #ffffff;
+            --text-primary: #1a1a2e;
+            --text-secondary: #6b7280;
+            --text-menu: #b0b3b8;
+            --text-menu-active: #ffffff;
+            --accent: #4361ee;
+            --accent-light: #4895ef;
+            --accent-bg: rgba(67, 97, 238, 0.1);
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --border: #e5e7eb;
+            --border-menu: #2a2a4a;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+        }
+
+        html.dark {
+            --bg-app: #0f0f1e;
+            --bg-sidebar: #1a1a2e;
+            --bg-menu: #0a0a16;
+            --bg-chat: #16213e;
+            --bg-card: #1a1a2e;
+            --bg-code: #0d0d1a;
+            --bg-input: #1a1a2e;
+            --text-primary: #e4e6eb;
+            --text-secondary: #9ca3af;
+            --text-menu: #b0b3b8;
+            --text-menu-active: #ffffff;
+            --border: #2a2a4a;
+            --border-menu: #1a1a3a;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg-app);
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        /* ===== Loading ===== */
+        .loading-page {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: var(--bg-app);
+        }
+        .loading-spinner {
+            width: 36px; height: 36px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== Login/Register ===== */
+        .login-page {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%);
+        }
+        .login-box {
+            background: var(--bg-sidebar);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            width: 380px;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+        }
+        .login-logo {
+            width: 56px; height: 56px;
+            border-radius: 14px;
+            object-fit: cover;
+            display: block;
+            margin: 0 auto 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 6px;
+            box-sizing: border-box;
+        }
+        .login-box h1 { font-size: 20px; margin-bottom: 8px; color: var(--text-primary); }
+        .login-box .subtitle { color: var(--text-secondary); font-size: 13px; margin-bottom: 24px; }
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            background: var(--bg-app);
+            border-radius: 8px;
+            padding: 4px;
+        }
+        .auth-tab {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .auth-tab.active {
+            background: var(--bg-sidebar);
+            color: var(--accent);
+            font-weight: 500;
+            box-shadow: var(--shadow);
+        }
+        .login-box input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-app);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .login-box input:focus { border-color: var(--accent); }
+        .login-box button.submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 4px;
+        }
+        .login-box button.submit-btn:hover { background: #3a56d4; }
+        .login-box button.submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .login-error {
+            color: var(--danger);
+            font-size: 12px;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: rgba(231, 76, 60, 0.1);
+            border-radius: 6px;
+        }
+
+        /* ===== App Layout ===== */
+        .app-layout {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ===== Menu Bar (Column 1) — 固定图标+文字 ===== */
+        .menu-bar {
+            width: 120px;
+            min-width: 120px;
+            background: var(--bg-menu);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            flex-shrink: 0;
+        }
+        .menu-logo {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 15px; color: white; letter-spacing: 0.5px;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+        .menu-items {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            padding: 0 8px;
+        }
+        .menu-btn {
+            width: 100%;
+            height: 40px;
+            border: none;
+            background: transparent;
+            color: var(--text-menu);
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+            padding: 0 12px;
+            gap: 10px;
+            transition: background 0.2s, color 0.2s;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .menu-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-menu-active); }
+        .menu-btn.active {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-menu-active);
+        }
+        .menu-btn.active::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 24px;
+            background: var(--accent-light);
+            border-radius: 0 3px 3px 0;
+        }
+        .menu-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+        .menu-btn-label {
+            font-size: 13px;
+            line-height: 1;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .menu-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            padding: 0 8px;
+        }
+
+        /* ===== Session List (Column 2) ===== */
+        .session-panel {
+            width: 280px;
+            min-width: 280px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .session-panel-header {
+            padding: 12px;
+            flex-shrink: 0;
+        }
+        .new-session-btn {
+            width: 100%;
+            padding: 10px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .new-session-btn:hover { background: #3a56d4; }
+        .session-search {
+            margin: 0 12px 8px;
+            position: relative;
+        }
+        .session-search input {
+            width: 100%;
+            padding: 8px 12px 8px 32px;
+            background: var(--bg-app);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .session-search input:focus { border-color: var(--accent); }
+        .session-search svg {
+            position: absolute;
+            left: 8px; top: 50%;
+            transform: translateY(-50%);
+            width: 16px; height: 16px;
+            color: var(--text-secondary);
+        }
+        .session-list-scroll {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            padding: 0 8px;
+        }
+        .session-group-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin: 12px 8px 6px;
+            font-weight: 600;
+        }
+        .session-group-label:first-child { margin-top: 4px; }
+        .session-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s;
+            position: relative;
+        }
+        .session-item:hover { background: var(--bg-app); }
+        .session-item.active {
+            background: var(--accent-bg);
+        }
+        .session-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 50%;
+            transform: translateY(-50%);
+            width: 3px; height: 20px;
+            background: var(--accent);
+            border-radius: 0 3px 3px 0;
+        }
+        .session-title {
+            font-size: 13px;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .session-item.active .session-title { font-weight: 500; }
+        .session-delete {
+            opacity: 0;
+            background: none;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+            flex-shrink: 0;
+            line-height: 1;
+            transition: opacity 0.2s;
+        }
+        .session-item:hover .session-delete { opacity: 0.7; }
+        .session-delete:hover { opacity: 1; }
+        .session-templates {
+            border-top: 1px solid var(--border);
+            padding: 12px 8px;
+            flex-shrink: 0;
+        }
+        .templates-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+            padding: 0 4px;
+        }
+        .template-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+        }
+        .template-btn:hover {
+            background: var(--accent-bg);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* ===== Main Area (Column 3) ===== */
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+            background: var(--bg-app);
+        }
+
+        /* ===== Chat Header ===== */
+        .chat-header {
+            height: 52px;
+            min-height: 52px;
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            flex-shrink: 0;
+        }
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .model-badge {
+            background: var(--accent-bg);
+            color: var(--accent);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid var(--border);
+        }
+        .chat-header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header-username {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-right: 4px;
+        }
+        .header-icon-btn {
+            width: 36px; height: 36px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .header-icon-btn:hover { background: var(--bg-app); color: var(--text-primary); }
+        .header-icon-btn svg { width: 18px; height: 18px; }
+
+        /* ===== Chat Container ===== */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            padding: 24px 0;
+        }
+        .chat-inner { max-width: 820px; margin: 0 auto; padding: 0 24px; }
+
+        /* ===== Empty State ===== */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-logo {
+            width: 72px; height: 72px;
+            border-radius: 18px;
+            object-fit: cover;
+            margin: 0 auto 16px;
+            display: block;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 6px;
+            box-sizing: border-box;
+            box-shadow: var(--shadow);
+        }
+        .empty-state h2 { font-size: 18px; color: var(--text-primary); margin-bottom: 8px; font-weight: 500; }
+        .empty-state p { font-size: 14px; }
+
+        /* ===== Messages ===== */
+        .msg { margin-bottom: 24px; }
+        .msg-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .msg-avatar {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 600; color: white;
+            flex-shrink: 0;
+        }
+        .msg-avatar.user { background: var(--accent); }
+        .msg-avatar.assistant { background: linear-gradient(135deg, var(--accent), var(--accent-light)); }
+        .msg-role { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+        .msg-bubble {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            box-shadow: var(--shadow);
+            line-height: 1.7;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .msg-bubble.user {
+            background: var(--accent);
+            color: white;
+        }
+        .msg-bubble pre {
+            background: var(--bg-code);
+            color: #e4e6eb;
+            padding: 14px 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-size: 13px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .msg-bubble pre code { background: transparent; padding: 0; color: inherit; }
+        .msg-bubble code {
+            background: rgba(0,0,0,0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        html.dark .msg-bubble code { background: rgba(255,255,255,0.1); }
+        .msg-bubble.user code { background: rgba(255,255,255,0.2); color: white; }
+        .msg-bubble p { margin: 6px 0; }
+        .msg-bubble ul, .msg-bubble ol { margin: 6px 0 6px 20px; }
+        .msg-bubble li { margin: 3px 0; }
+        .msg-bubble strong { font-weight: 600; }
+        .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 { margin: 12px 0 6px; }
+        .msg-bubble a { color: var(--accent); }
+        .msg-bubble blockquote {
+            border-left: 3px solid var(--border);
+            padding-left: 12px;
+            margin: 8px 0;
+            color: var(--text-secondary);
+        }
+
+        /* ===== Reasoning ===== */
+        .reasoning-box {
+            background: var(--bg-app);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .reasoning-header {
+            padding: 8px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .reasoning-header:hover { background: var(--bg-card); }
+        .reasoning-header .arrow { transition: transform 0.2s; font-size: 10px; }
+        .reasoning-header .arrow.open { transform: rotate(90deg); }
+        .reasoning-header .copy-reasoning {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .reasoning-header .copy-reasoning:hover { opacity: 1; }
+        .reasoning-content {
+            padding: 12px 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ===== Tool Events ===== */
+        .tool-group {
+            margin-bottom: 8px;
+        }
+        .tool-group-header {
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            padding: 4px 0;
+        }
+        .tool-group-header .arrow { transition: transform 0.2s; font-size: 10px; }
+        .tool-group-header .arrow.open { transform: rotate(90deg); }
+        .tool-list {
+            margin-top: 4px;
+        }
+        .tool-box {
+            background: var(--bg-app);
+            border-left: 3px solid var(--warning);
+            border-radius: 4px;
+            margin-top: 4px;
+            margin-bottom: 4px;
+            overflow: hidden;
+        }
+        .tool-box.error { border-color: var(--danger); }
+        .tool-header {
+            padding: 8px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            color: var(--text-secondary);
+        }
+        .tool-header .icon { font-size: 14px; }
+        .tool-header .name { font-weight: 500; color: var(--text-primary); }
+        .tool-box.error .tool-header .name { color: var(--danger); }
+        .tool-header .arrow { transition: transform 0.2s; margin-left: auto; font-size: 10px; }
+        .tool-header .arrow.open { transform: rotate(90deg); }
+        .tool-content {
+            padding: 10px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 250px;
+            overflow-y: auto;
+            background: var(--bg-card);
+            font-family: "SFMono-Regular", Consolas, monospace;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ===== Config Card ===== */
+        .config-card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            margin-top: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .config-card-header {
+            background: var(--bg-menu);
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .config-type-tag {
+            background: var(--accent);
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .config-name-text { font-weight: 600; font-size: 14px; }
+        .config-action-tag {
+            background: var(--warning);
+            color: #333;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: auto;
+        }
+        .config-detail-text {
+            padding: 10px 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-app);
+        }
+        .config-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .config-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .config-label-text { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; }
+        .copy-btn {
+            background: var(--bg-app); color: var(--text-secondary); border: 1px solid var(--border);
+            padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; transition: all 0.2s;
+        }
+        .copy-btn:hover { background: var(--border); }
+        .copy-btn.copied { background: var(--success); color: white; border-color: var(--success); }
+        .config-section pre {
+            background: var(--bg-code); color: #e4e6eb;
+            padding: 12px; border-radius: 6px; overflow-x: auto;
+            max-height: 350px; overflow-y: auto; font-size: 12px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .config-section pre code { background: transparent; padding: 0; }
+        .config-actions-row { padding: 12px 16px; text-align: right; }
+        .apply-btn {
+            background: var(--success); color: white; border: none;
+            padding: 8px 24px; border-radius: 6px; cursor: pointer;
+            font-size: 13px; font-weight: 500; transition: all 0.2s;
+        }
+        .apply-btn:hover { background: #27ae60; }
+        .apply-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+        /* ===== Typing indicator ===== */
+        .typing { display: inline-flex; gap: 4px; padding: 8px 0; }
+        .typing span {
+            width: 8px; height: 8px; background: var(--text-secondary);
+            border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        /* ===== Input Area ===== */
+        .input-area {
+            background: var(--bg-sidebar);
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .input-wrapper { max-width: 1100px; margin: 0 auto; display: flex; gap: 12px; align-items: flex-end; }
+        .input-wrapper textarea {
+            flex: 1; padding: 14px 18px; border: 1px solid var(--border);
+            border-radius: var(--radius); resize: none; font-size: 15px; font-family: inherit;
+            outline: none; max-height: 280px; transition: border-color 0.2s; line-height: 1.6;
+            background: var(--bg-input); color: var(--text-primary);
+        }
+        .input-wrapper textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+        .send-btn {
+            background: var(--accent); color: white; border: none;
+            padding: 0 24px; height: 44px; border-radius: var(--radius);
+            cursor: pointer; font-size: 14px; font-weight: 500; min-width: 80px; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .send-btn:hover { background: #3a56d4; }
+        .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+        .send-btn.stop { background: var(--danger); }
+        .send-btn.stop:hover { background: #c0392b; }
+        .send-btn svg { width: 16px; height: 16px; }
+
+        /* ===== Config Page ===== */
+        .config-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .config-form {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+        .config-empty-tip {
+            background: rgba(67, 97, 238, 0.08);
+            border: 1px solid rgba(67, 97, 238, 0.3);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        .otp-input {
+            letter-spacing: 4px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .otp-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+            margin: 4px 0;
+        }
+        .otp-checkbox-label input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .otp-setup {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            margin: 4px 0;
+        }
+        .otp-secret-display {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .otp-qrcode {
+            display: flex;
+            justify-content: center;
+            margin: 8px auto;
+        }
+        .otp-qrcode img {
+            border: 1px solid var(--border);
+            border-radius: 4px;
+        }
+        .otp-secret-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .otp-secret-code {
+            display: block;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+            background: var(--bg-hover);
+            padding: 8px 10px;
+            border-radius: 4px;
+            word-break: break-all;
+            letter-spacing: 1px;
+        }
+        .otp-required-tip {
+            font-size: 12px;
+            color: var(--warning, #e67e22);
+            background: rgba(230, 126, 34, 0.1);
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .config-form-section {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .config-form-section h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group:last-child { margin-bottom: 0; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .form-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        .form-input, .form-select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            font-family: inherit;
+        }
+        .form-input:focus, .form-select:focus { border-color: var(--accent); }
+        .form-row {
+            display: flex;
+            gap: 12px;
+        }
+        .form-row .form-group { flex: 1; }
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .form-checkbox input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+        .form-checkbox label { font-size: 14px; color: var(--text-primary); cursor: pointer; }
+        .config-save-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .save-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .save-btn:hover { background: #3a56d4; }
+        .save-btn:disabled { background: var(--border); cursor: not-allowed; }
+        .config-message {
+            font-size: 13px;
+            padding: 8px 14px;
+            border-radius: 6px;
+        }
+        .config-message.success { color: var(--success); background: rgba(46, 204, 113, 0.1); }
+        .config-message.error { color: var(--danger); background: rgba(231, 76, 60, 0.1); }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+        html.dark ::-webkit-scrollbar-thumb { background: var(--border); }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 768px) {
+            .session-panel {
+                position: absolute;
+                left: 64px;
+                top: 0;
+                bottom: 0;
+                z-index: 100;
+                box-shadow: var(--shadow-lg);
+            }
+            .chat-inner { padding: 0 12px; }
+            .input-area { padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <!-- Loading -->
+        <div v-if="authState === 'loading'" class="loading-page">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <!-- Login / Register -->
+        <div v-else-if="authState === 'login'" class="login-page">
+            <div class="login-box">
+                <img class="login-logo" src="/logo.jpeg" alt="JXWAF Agent">
+                <h1>JXWAF Agent</h1>
+                <p class="subtitle">Web 应用防火墙智能配置助手</p>
+                <div class="auth-tabs">
+                    <button class="auth-tab" :class="{active: authTab === 'login'}" @click="authTab = 'login'">登录</button>
+                    <button class="auth-tab" :class="{active: authTab === 'register'}" @click="authTab = 'register'">注册</button>
+                </div>
+                <div v-if="authError" class="login-error">{{ authError }}</div>
+                <template v-if="authTab === 'login'">
+                    <input type="text" v-model="loginForm.username" placeholder="用户名" @keyup.enter="doLogin" ref="loginInputRef">
+                    <input type="password" v-model="loginForm.password" placeholder="密码" @keyup.enter="doLogin">
+                    <div v-if="loginForm.otp_required" class="otp-required-tip">该账号已绑定 OTP，请输入验证码</div>
+                    <input v-if="loginForm.otp_required" type="text" v-model="loginForm.otp_code" placeholder="OTP 验证码（6位数字）" @keyup.enter="doLogin" maxlength="6" inputmode="numeric" class="otp-input">
+                    <button class="submit-btn" @click="doLogin" :disabled="authLoading">{{ authLoading ? '登录中...' : (loginForm.otp_required ? '验证并登录' : '登录') }}</button>
+                </template>
+                <template v-else>
+                    <input type="text" v-model="registerForm.username" placeholder="用户名" @keyup.enter="doRegister">
+                    <input type="password" v-model="registerForm.password" placeholder="密码" @keyup.enter="doRegister">
+                    <input type="password" v-model="registerForm.confirm" placeholder="确认密码" @keyup.enter="doRegister">
+                    <label class="otp-checkbox-label">
+                        <input type="checkbox" v-model="registerForm.enable_otp" @change="onToggleOTP"> 开启 OTP 双因素验证
+                    </label>
+                    <div v-if="registerForm.enable_otp" class="otp-setup">
+                        <div class="otp-secret-display" v-if="registerForm.otp_secret">
+                            <div class="otp-secret-label">扫描二维码或手动输入密钥：</div>
+                            <div ref="otpQrcodeRef" class="otp-qrcode"></div>
+                            <code class="otp-secret-code">{{ registerForm.otp_secret }}</code>
+                        </div>
+                        <input type="text" v-model="registerForm.otp_code" placeholder="输入 Authenticator 中的 6 位验证码" @keyup.enter="doRegister" maxlength="6" inputmode="numeric" class="otp-input">
+                    </div>
+                    <button class="submit-btn" @click="doRegister" :disabled="authLoading">{{ authLoading ? '注册中...' : '注册' }}</button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Main App -->
+        <div v-else class="app-layout">
+            <!-- Column 1: Menu Bar -->
+            <div class="menu-bar">
+                <div class="menu-logo">JX</div>
+                <div class="menu-items">
+                    <button class="menu-btn" :class="{active: activeMenu === 'chat'}" @click="switchMenu('chat')" title="聊天">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span class="menu-btn-label">聊天对话</span>
+                    </button>
+                    <button class="menu-btn" :class="{active: activeMenu === 'config'}" @click="switchMenu('config')" title="配置">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span class="menu-btn-label">配置管理</span>
+                    </button>
+                </div>
+                <div class="menu-bottom">
+                    <button class="menu-btn" @click="cycleTheme" :title="themeLabel">
+                        <svg v-if="theme === 'light'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                            <line x1="1" y1="12" x2="3" y2="12"/>
+                            <line x1="21" y1="12" x2="23" y2="12"/>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                        </svg>
+                        <svg v-else-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/>
+                        </svg>
+                        <span class="menu-btn-label">主题切换</span>
+                    </button>
+                    <button class="menu-btn" @click="logout" title="退出登录">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        <span class="menu-btn-label">退出登录</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column 2: Session List (chat mode only) -->
+            <div v-if="activeMenu === 'chat'" class="session-panel">
+                <div class="session-panel-header">
+                    <button class="new-session-btn" @click="createSession">+ 新建会话</button>
+                </div>
+                <div class="session-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" v-model="sessionSearch" placeholder="搜索会话...">
+                </div>
+                <div class="session-list-scroll">
+                    <template v-for="group in groupedSessions" :key="group.label">
+                        <div class="session-group-label">{{ group.label }}</div>
+                        <div v-for="s in group.items" :key="s.id"
+                             class="session-item" :class="{active: s.id === currentSessionId}"
+                             @click="switchSession(s.id)">
+                            <span class="session-title">{{ s.title || '新会话' }}</span>
+                            <button class="session-delete" @click.stop="deleteSession(s.id)" title="删除">×</button>
+                        </div>
+                    </template>
+                    <div v-if="filteredSessions.length === 0" style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+                        {{ sessionSearch ? '无匹配会话' : '暂无会话' }}
+                    </div>
+                </div>
+                <div class="session-templates">
+                    <div class="templates-label">快捷模板</div>
+                    <button v-for="t in templates" :key="t.text" class="template-btn" @click="fillTemplate(t.text)">
+                        {{ t.label }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column 3: Main Area -->
+            <div class="main-area">
+                <!-- Chat Mode -->
+                <template v-if="activeMenu === 'chat'">
+                    <div class="chat-header">
+                        <div class="chat-header-left">
+                            <span class="model-badge">{{ configForm.llm.model || '未配置' }}</span>
+                        </div>
+                        <div class="chat-header-right">
+                            <span class="header-username">{{ username }}</span>
+                            <button class="header-icon-btn" @click="cycleTheme" :title="themeLabel">
+                                <svg v-if="theme === 'light'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="5"/>
+                                    <line x1="12" y1="1" x2="12" y2="3"/>
+                                    <line x1="12" y1="21" x2="12" y2="23"/>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                    <line x1="1" y1="12" x2="3" y2="12"/>
+                                    <line x1="21" y1="12" x2="23" y2="12"/>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                </svg>
+                                <svg v-else-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                                </svg>
+                                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <button class="header-icon-btn" @click="logout" title="退出登录">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                    <polyline points="16 17 21 12 16 7"/>
+                                    <line x1="21" y1="12" x2="9" y2="12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="chat-container" ref="chatContainer">
+                        <div class="chat-inner">
+                            <div v-if="messages.length === 0" class="empty-state">
+                                <img src="/logo.jpeg" class="empty-logo" alt="JXWAF Agent">
+                                <h2>JXWAF Agent</h2>
+                                <p>输入需求或点击下方模板开始配置</p>
+                            </div>
+
+                            <div v-for="msg in messages" :key="msg.id" class="msg">
+                                <!-- User message -->
+                                <template v-if="msg.role === 'user'">
+                                    <div class="msg-header">
+                                        <div class="msg-avatar user">我</div>
+                                        <span class="msg-role">用户</span>
+                                    </div>
+                                    <div class="msg-bubble user">{{ msg.content }}</div>
+                                </template>
+                                <!-- Assistant message -->
+                                <template v-else>
+                                    <div class="msg-header">
+                                        <div class="msg-avatar assistant">AI</div>
+                                        <span class="msg-role">助手</span>
+                                    </div>
+                                    <!-- Reasoning -->
+                                    <div v-if="msg.reasoning" class="reasoning-box">
+                                        <div class="reasoning-header" @click="msg.reasoningOpen = !msg.reasoningOpen">
+                                            <span class="arrow" :class="{open: msg.reasoningOpen}">▶</span>
+                                            💭 思维过程 ({{ msg.reasoning.length }} 字)
+                                            <span class="copy-reasoning" @click.stop="copyText(msg.reasoning, msg, 'reasoning')">{{ msg.copiedField === 'reasoning' ? '已复制' : '复制' }}</span>
+                                        </div>
+                                        <div v-show="msg.reasoningOpen" class="reasoning-content">{{ msg.reasoning }}</div>
+                                    </div>
+                                    <!-- Segments: 按时序渲染文本/工具/配置卡片 -->
+                                    <template v-for="(seg, si) in msg.segments" :key="'s'+si">
+                                        <!-- Text segment -->
+                                        <div v-if="seg.type === 'text'" class="msg-bubble">
+                                            <div v-html="renderMarkdown(seg.content)"></div>
+                                        </div>
+                                        <!-- Tool segment -->
+                                        <div v-else-if="seg.type === 'tool'" class="tool-box" :class="{error: seg.status === 'error'}">
+                                            <div class="tool-header" @click="seg.open = !seg.open">
+                                                <span class="icon">{{ seg.status === 'running' ? '⏳' : seg.status === 'error' ? '⚠' : '✓' }}</span>
+                                                <span class="name">{{ seg.name }}</span>
+                                                <span class="arrow" :class="{open: seg.open}">▶</span>
+                                            </div>
+                                            <div v-show="seg.open" class="tool-content">{{ seg.detail }}</div>
+                                        </div>
+                                        <!-- Config card segment -->
+                                        <div v-else-if="seg.type === 'config'" class="config-card">
+                                            <div class="config-card-header">
+                                                <span class="config-type-tag">{{ typeLabel(seg.config.script_type) }}</span>
+                                                <span class="config-name-text">{{ seg.config.name }}</span>
+                                                <span v-if="getAction(seg.config)" class="config-action-tag">{{ getAction(seg.config) }}</span>
+                                            </div>
+                                            <div v-if="seg.config.explanation" class="config-detail-text">{{ seg.config.explanation }}</div>
+                                            <div v-if="seg.config.code_lua" class="config-section">
+                                                <div class="config-label-row">
+                                                    <span class="config-label-text">Lua 代码</span>
+                                                    <button class="copy-btn" :class="{copied: seg.config.copiedField==='lua'}" @click="copyText(seg.config.code_lua, seg.config, 'lua')">{{ seg.config.copiedField === 'lua' ? '已复制' : '复制' }}</button>
+                                                </div>
+                                                <pre><code class="hljs" v-html="highlightCode(seg.config.code_lua, 'lua')"></code></pre>
+                                            </div>
+                                            <div v-if="seg.config.config_json" class="config-section">
+                                                <div class="config-label-row">
+                                                    <span class="config-label-text">配置 JSON</span>
+                                                    <button class="copy-btn" :class="{copied: seg.config.copiedField==='json'}" @click="copyText(seg.config.config_json, seg.config, 'json')">{{ seg.config.copiedField === 'json' ? '已复制' : '复制' }}</button>
+                                                </div>
+                                                <pre><code class="hljs" v-html="highlightCode(seg.config.config_json, 'json')"></code></pre>
+                                            </div>
+                                            <div v-if="seg.config.base64_cmd" class="config-section">
+                                                <div class="config-label-row">
+                                                    <span class="config-label-text">Base64 编码命令</span>
+                                                    <button class="copy-btn" :class="{copied: seg.config.copiedField==='b64'}" @click="copyText(seg.config.base64_cmd, seg.config, 'b64')">{{ seg.config.copiedField === 'b64' ? '已复制' : '复制' }}</button>
+                                                </div>
+                                                <pre><code class="hljs">{{ seg.config.base64_cmd }}</code></pre>
+                                            </div>
+                                            <div v-if="seg.config.cli_command" class="config-section">
+                                                <div class="config-label-row">
+                                                    <span class="config-label-text">CLI 命令</span>
+                                                    <button class="copy-btn" :class="{copied: seg.config.copiedField==='cli'}" @click="copyText(seg.config.cli_command, seg.config, 'cli')">{{ seg.config.copiedField === 'cli' ? '已复制' : '复制' }}</button>
+                                                </div>
+                                                <pre><code class="hljs" v-html="highlightCode(seg.config.cli_command, 'bash')"></code></pre>
+                                            </div>
+                                            <div class="config-actions-row">
+                                                <button class="apply-btn" :disabled="msg.applying" @click="applyConfig(msg, seg.config)">
+                                                    {{ msg.applying ? '应用中...' : '应用到 WAF' }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <!-- Thinking indicator (无内容时显示) -->
+                                    <div v-if="msg.thinking && !msg.segments.length" class="msg-bubble">
+                                        <div class="typing">
+                                            <span></span><span></span><span></span>
+                                        </div>
+                                    </div>
+                                    <!-- Interrupted -->
+                                    <div v-if="msg.interrupted" style="color:var(--text-secondary);font-size:12px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">⏹ 已中断</div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="input-area">
+                        <div class="input-wrapper">
+                            <textarea ref="inputRef" v-model="inputText" rows="3"
+                                placeholder="输入需求，如：帮我生成一条规则拦截访问 /admin 的请求（Ctrl+Enter 发送）"
+                                @keydown="handleKey" @input="autoResize"></textarea>
+                            <button class="send-btn" :class="{stop: isStreaming}" @click="isStreaming ? stopStreaming() : send()">
+                                <svg v-if="isStreaming" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                                <span>{{ isStreaming ? '停止' : '发送' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Config Mode -->
+                <template v-else>
+                    <div class="chat-header">
+                        <div class="chat-header-left">
+                            <span class="model-badge">配置管理</span>
+                        </div>
+                        <div class="chat-header-right">
+                            <span class="header-username">{{ username }}</span>
+                            <button class="header-icon-btn" @click="cycleTheme" :title="themeLabel">
+                                <svg v-if="theme === 'light'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="5"/>
+                                    <line x1="12" y1="1" x2="12" y2="3"/>
+                                    <line x1="12" y1="21" x2="12" y2="23"/>
+                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                    <line x1="1" y1="12" x2="3" y2="12"/>
+                                    <line x1="21" y1="12" x2="23" y2="12"/>
+                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                </svg>
+                                <svg v-else-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                                </svg>
+                                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <button class="header-icon-btn" @click="logout" title="退出登录">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                    <polyline points="16 17 21 12 16 7"/>
+                                    <line x1="21" y1="12" x2="9" y2="12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="config-container">
+                        <div class="config-form">
+                            <div v-if="!configForm.llm.api_key" class="config-empty-tip">
+                                <strong>首次使用提示：</strong>请填写下方 LLM 和 JXWAF 配置后保存，才能开始使用聊天功能。
+                            </div>
+                            <!-- LLM Config -->
+                            <div class="config-form-section">
+                                <h3>LLM 配置</h3>
+                                <div class="form-group">
+                                    <label class="form-label">API Key</label>
+                                    <input type="password" class="form-input" v-model="configForm.llm.api_key" placeholder="LLM API Key">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Base URL</label>
+                                    <input type="text" class="form-input" v-model="configForm.llm.base_url" placeholder="https://api.example.com/v1">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">模型</label>
+                                    <input type="text" class="form-input" v-model="configForm.llm.model" placeholder="模型名称">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">Reasoning Effort</label>
+                                        <select class="form-select" v-model="configForm.llm.reasoning_effort">
+                                            <option value="max">max</option>
+                                            <option value="high">high</option>
+                                            <option value="medium">medium</option>
+                                            <option value="low">low</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Max Tokens</label>
+                                        <input type="number" class="form-input" v-model.number="configForm.llm.max_tokens" placeholder="65536">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="form-checkbox">
+                                        <input type="checkbox" id="thinking-enabled" v-model="thinkingEnabled">
+                                        <label for="thinking-enabled">启用思维链</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- JXWAF Config -->
+                            <div class="config-form-section">
+                                <h3>JXWAF 配置</h3>
+                                <div class="form-group">
+                                    <label class="form-label">API URL</label>
+                                    <input type="text" class="form-input" v-model="configForm.jxwaf.api_url" placeholder="https://user.jxwaf.com">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Waf Auth Token</label>
+                                    <input type="password" class="form-input" v-model="configForm.jxwaf.waf_auth" placeholder="WAF 认证 Token">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Group</label>
+                                    <input type="text" class="form-input" v-model="configForm.jxwaf.group" placeholder="default">
+                                </div>
+                            </div>
+
+                            <!-- Verify URL -->
+                            <div class="config-form-section">
+                                <h3>验证 URL</h3>
+                                <div class="form-group">
+                                    <label class="form-label">Verify URL</label>
+                                    <input type="text" class="form-input" v-model="configForm.verify_url" placeholder="https://demo.jxwaf.com">
+                                    <div class="form-hint">用于 verify.py 测试的 WAF 目标地址</div>
+                                </div>
+                            </div>
+
+                            <div class="config-save-bar">
+                                <button class="save-btn" @click="saveConfig" :disabled="configSaving">
+                                    {{ configSaving ? '保存中...' : '保存配置' }}
+                                </button>
+                                <div v-if="configMessage" class="config-message" :class="configMessageType">{{ configMessage }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive, computed, nextTick, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                // === 认证状态 ===
+                const authState = ref('loading');
+                const username = ref('');
+                const loginForm = reactive({ username: '', password: '', otp_code: '', otp_required: false });
+                const registerForm = reactive({ username: '', password: '', confirm: '', enable_otp: false, otp_secret: '', otp_code: '' });
+                const authTab = ref('login');
+                const authError = ref('');
+                const authLoading = ref(false);
+                const loginInputRef = ref(null);
+                const otpQrcodeRef = ref(null);
+
+                // === 主应用状态 ===
+                const activeMenu = ref('chat');
+                const theme = ref(localStorage.getItem('theme') || 'auto');
+
+                // === 会话状态 ===
+                const sessions = reactive([]);
+                const currentSessionId = ref('');
+                const messages = reactive([]);
+                const inputText = ref('');
+                const isStreaming = ref(false);
+                const chatContainer = ref(null);
+                const inputRef = ref(null);
+                const sessionSearch = ref('');
+                const streamingMap = new Map(); // sessionId -> { abortController, assistantMsg }
+                let msgIdCounter = 0;
+
+                // === 配置状态 ===
+                const configForm = reactive({
+                    llm: {
+                        api_key: '', base_url: '', model: '',
+                        thinking: {}, reasoning_effort: 'max',
+                        max_tokens: 65536, temperature: 1.0,
+                        do_sample: false
+                    },
+                    jxwaf: { api_url: '', waf_auth: '', group: 'default' },
+                    verify_url: ''
+                });
+                const configSaving = ref(false);
+                const configMessage = ref('');
+                const configMessageType = ref('');
+
+                // === 模板 ===
+                const templates = ref([]);
+
+                async function loadTemplates() {
+                    try {
+                        const res = await fetch('/api/templates');
+                        const data = await res.json();
+                        templates.value = data.templates || [];
+                    } catch (e) {
+                        console.error('加载模板失败:', e);
+                    }
+                }
+
+                const TYPE_LABELS = {
+                    web_rule: 'Web防护规则', flow_rule: '流量防护规则',
+                    component: '防护组件', name_list: '名单防护'
+                };
+
+                // === 计算属性 ===
+                const themeLabel = computed(() => {
+                    const labels = { light: '亮色模式', dark: '暗色模式', auto: '跟随系统' };
+                    return labels[theme.value] || '跟随系统';
+                });
+
+                const filteredSessions = computed(() => {
+                    if (!sessionSearch.value) return sessions;
+                    const q = sessionSearch.value.toLowerCase();
+                    return sessions.filter(s => (s.title || '').toLowerCase().includes(q));
+                });
+
+                const groupedSessions = computed(() => {
+                    return groupSessionsByDate(filteredSessions.value);
+                });
+
+                const thinkingEnabled = computed({
+                    get: () => configForm.llm.thinking && configForm.llm.thinking.type === 'enabled',
+                    set: (val) => { configForm.llm.thinking = val ? { type: 'enabled' } : { type: 'disabled' }; }
+                });
+
+                // === 工具函数 ===
+                function typeLabel(t) { return TYPE_LABELS[t] || t; }
+
+                function escapeHtml(s) {
+                    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                }
+
+                function renderMarkdown(text) {
+                    if (!text) return '';
+                    marked.setOptions({ breaks: true, gfm: true });
+                    const raw = marked.parse(text);
+                    const clean = DOMPurify.sanitize(raw, { ADD_ATTR: ['target'] });
+                    // 高亮代码块
+                    const temp = document.createElement('div');
+                    temp.innerHTML = clean;
+                    temp.querySelectorAll('pre code').forEach(block => {
+                        try { hljs.highlightElement(block); } catch (e) {}
+                    });
+                    return temp.innerHTML;
+                }
+
+                function highlightCode(code, lang) {
+                    if (!code) return '';
+                    try {
+                        if (lang && hljs.getLanguage(lang)) {
+                            return hljs.highlight(code, { language: lang }).value;
+                        }
+                        return hljs.highlightAuto(code).value;
+                    } catch (e) {
+                        return escapeHtml(code);
+                    }
+                }
+
+                function groupSessionsByDate(list) {
+                    const now = new Date();
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const yesterday = new Date(today.getTime() - 86400000);
+                    const weekAgo = new Date(today.getTime() - 7 * 86400000);
+
+                    const groups = { '今天': [], '昨天': [], '7天内': [], '更早': [] };
+                    for (const s of list) {
+                        const date = new Date(s.updated_at || s.created_at);
+                        if (date >= today) groups['今天'].push(s);
+                        else if (date >= yesterday) groups['昨天'].push(s);
+                        else if (date >= weekAgo) groups['7天内'].push(s);
+                        else groups['更早'].push(s);
+                    }
+                    const result = [];
+                    for (const [label, items] of Object.entries(groups)) {
+                        if (items.length > 0) result.push({ label, items });
+                    }
+                    return result;
+                }
+
+                function scrollToBottom() {
+                    const el = chatContainer.value;
+                    // 检查用户是否在底部附近（150px 阈值），避免输出过程中强制拉回底部
+                    const shouldScroll = el ? (el.scrollHeight - el.scrollTop - el.clientHeight < 150) : true;
+                    nextTick(() => {
+                        if (shouldScroll && chatContainer.value) {
+                            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                        }
+                    });
+                }
+
+                function forceScrollToBottom() {
+                    nextTick(() => {
+                        if (chatContainer.value) {
+                            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                        }
+                    });
+                }
+
+                function autoResize() {
+                    const el = inputRef.value;
+                    if (el) {
+                        el.style.height = 'auto';
+                        el.style.height = Math.min(el.scrollHeight, 280) + 'px';
+                    }
+                }
+
+                function fillTemplate(text) {
+                    inputText.value = text;
+                    nextTick(() => autoResize());
+                    inputRef.value?.focus();
+                }
+
+                function handleKey(e) {
+                    // Ctrl+Enter 或 Cmd+Enter 发送，普通 Enter 换行
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        send();
+                    }
+                }
+
+                function getAction(cfg) {
+                    try {
+                        const conf = JSON.parse(cfg.config_json);
+                        return conf.rule_action || conf.name_list_action || (cfg.script_type === 'component' ? 'lua' : '');
+                    } catch (e) { return ''; }
+                }
+
+                async function copyText(text, target, field) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        target.copiedField = field;
+                        setTimeout(() => { target.copiedField = ''; }, 1500);
+                    } catch (e) {}
+                }
+
+                async function applyConfig(msg, cfg) {
+                    msg.applying = true;
+                    inputText.value = '应用上述 ' + typeLabel(cfg.script_type) + ' 配置：' + cfg.name;
+                    nextTick(() => autoResize());
+                    await send();
+                    msg.applying = false;
+                }
+
+                // === API 封装 ===
+                async function apiFetch(url, options = {}) {
+                    const resp = await fetch(url, {
+                        ...options,
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(options.headers || {})
+                        }
+                    });
+                    if (resp.status === 401) {
+                        authState.value = 'login';
+                        throw new Error('未认证');
+                    }
+                    return resp;
+                }
+
+                // === 认证 ===
+                async function checkAuth() {
+                    try {
+                        const resp = await fetch('/api/auth/me', { credentials: 'include' });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            username.value = data.username || '';
+                            authState.value = 'app';
+                            await loadConfig();
+                            await loadSessions();
+                            if (sessions.length === 0) {
+                                await createSession();
+                            } else {
+                                await switchSession(sessions[0].id);
+                            }
+                        } else {
+                            authState.value = 'login';
+                        }
+                    } catch (e) {
+                        authState.value = 'login';
+                    }
+                }
+
+                async function doLogin() {
+                    authError.value = '';
+                    if (!loginForm.username || !loginForm.password) {
+                        authError.value = '请输入用户名和密码';
+                        return;
+                    }
+                    if (loginForm.otp_required && !loginForm.otp_code) {
+                        authError.value = '请输入 OTP 验证码';
+                        return;
+                    }
+                    authLoading.value = true;
+                    try {
+                        const url = loginForm.otp_required ? '/api/auth/login/otp' : '/api/auth/login';
+                        const body = loginForm.otp_required
+                            ? { username: loginForm.username, password: loginForm.password, otp_code: loginForm.otp_code }
+                            : { username: loginForm.username, password: loginForm.password };
+                        const resp = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify(body),
+                        });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            username.value = data.username || loginForm.username;
+                            authState.value = 'app';
+                            loginForm.username = '';
+                            loginForm.password = '';
+                            loginForm.otp_code = '';
+                            loginForm.otp_required = false;
+                            await loadConfig();
+                            await loadSessions();
+                            if (sessions.length === 0) {
+                                await createSession();
+                            } else {
+                                await switchSession(sessions[0].id);
+                            }
+                        } else if (resp.status === 401) {
+                            const data = await resp.json().catch(() => ({}));
+                            if (data.error === 'otp_required') {
+                                loginForm.otp_required = true;
+                                authError.value = '该账号已绑定 OTP，请输入验证码';
+                            } else {
+                                authError.value = '用户名或密码错误';
+                            }
+                        } else {
+                            authError.value = '登录失败，请重试';
+                        }
+                    } catch (e) {
+                        authError.value = '网络错误，请重试';
+                    } finally {
+                        authLoading.value = false;
+                    }
+                }
+
+                // 注册时勾选/取消 OTP：勾选时从后端获取密钥并生成二维码
+                async function onToggleOTP() {
+                    if (registerForm.enable_otp && !registerForm.otp_secret) {
+                        try {
+                            const resp = await fetch('/api/auth/otp-secret', { credentials: 'include' });
+                            if (resp.ok) {
+                                const data = await resp.json();
+                                registerForm.otp_secret = data.secret;
+                                // 生成 otpauth:// 二维码
+                                nextTick(() => {
+                                    if (otpQrcodeRef.value) {
+                                        otpQrcodeRef.value.innerHTML = '';
+                                        const label = encodeURIComponent('JXWAFAgent:' + registerForm.username);
+                                        const uri = `otpauth://totp/${label}?secret=${data.secret}&issuer=JXWAFAgent&digits=6&period=30`;
+                                        new QRCode(otpQrcodeRef.value, {
+                                            text: uri,
+                                            width: 180,
+                                            height: 180,
+                                            colorDark: '#000000',
+                                            colorLight: '#ffffff',
+                                            correctLevel: QRCode.CorrectLevel.M,
+                                        });
+                                    }
+                                });
+                            }
+                        } catch (e) {}
+                    } else if (!registerForm.enable_otp) {
+                        registerForm.otp_secret = '';
+                        registerForm.otp_code = '';
+                        if (otpQrcodeRef.value) {
+                            otpQrcodeRef.value.innerHTML = '';
+                        }
+                    }
+                }
+
+                async function doRegister() {
+                    authError.value = '';
+                    if (!registerForm.username || !registerForm.password) {
+                        authError.value = '请输入用户名和密码';
+                        return;
+                    }
+                    if (registerForm.password !== registerForm.confirm) {
+                        authError.value = '两次密码不一致';
+                        return;
+                    }
+                    if (registerForm.enable_otp && !registerForm.otp_code) {
+                        authError.value = '请输入 OTP 验证码';
+                        return;
+                    }
+                    authLoading.value = true;
+                    try {
+                        const body = { username: registerForm.username, password: registerForm.password };
+                        if (registerForm.enable_otp) {
+                            body.otp_secret = registerForm.otp_secret;
+                            body.otp_code = registerForm.otp_code;
+                        }
+                        const resp = await fetch('/api/auth/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify(body),
+                        });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            username.value = data.username || registerForm.username;
+                            authState.value = 'app';
+                            registerForm.username = '';
+                            registerForm.password = '';
+                            registerForm.confirm = '';
+                            registerForm.enable_otp = false;
+                            registerForm.otp_secret = '';
+                            registerForm.otp_code = '';
+                            await loadConfig();
+                            await loadSessions();
+                            if (sessions.length === 0) {
+                                await createSession();
+                            } else {
+                                await switchSession(sessions[0].id);
+                            }
+                        } else if (resp.status === 409) {
+                            authError.value = '用户名已存在';
+                        } else if (resp.status === 403) {
+                            authError.value = '注册已关闭';
+                        } else if (resp.status === 401) {
+                            authError.value = 'OTP 验证码错误';
+                        } else {
+                            authError.value = '注册失败，请重试';
+                        }
+                    } catch (e) {
+                        authError.value = '网络错误，请重试';
+                    } finally {
+                        authLoading.value = false;
+                    }
+                }
+
+                async function logout() {
+                    try {
+                        await fetch('/api/auth/logout', {
+                            method: 'POST',
+                            credentials: 'include',
+                        });
+                    } catch (e) {}
+                    authState.value = 'login';
+                    sessions.splice(0, sessions.length);
+                    messages.splice(0, messages.length);
+                    currentSessionId.value = '';
+                    username.value = '';
+                }
+
+                // === 会话管理 ===
+                async function loadSessions() {
+                    try {
+                        const resp = await apiFetch('/api/sessions');
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            sessions.splice(0, sessions.length, ...(data.sessions || []));
+                        }
+                    } catch (e) {}
+                }
+
+                async function createSession() {
+                    try {
+                        const resp = await apiFetch('/api/sessions', { method: 'POST' });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            sessions.unshift(data);
+                            await switchSession(data.id);
+                        }
+                    } catch (e) {}
+                }
+
+                async function switchSession(id) {
+                    // 不中断其他会话的流式输出
+                    currentSessionId.value = id;
+                    isStreaming.value = streamingMap.has(id);
+                    messages.splice(0, messages.length);
+                    nextTick(() => inputRef.value?.focus());
+                    // 加载历史消息
+                    try {
+                        const resp = await apiFetch('/api/sessions/' + id);
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            loadHistoryMessages(data.messages || []);
+                        }
+                    } catch (e) {}
+                    // 如果该会话正在流式输出，重新挂载 assistantMsg 到消息列表
+                    if (streamingMap.has(id)) {
+                        messages.push(streamingMap.get(id).assistantMsg);
+                        forceScrollToBottom();
+                    }
+                }
+
+                // 将后端 OpenAI 格式消息转换为前端展示格式
+                // 一个用户请求的所有 assistant 消息（含多轮工具调用）合并为一个前端消息
+                // 使用 segments 数组保留文本与工具调用的时序关系
+                function loadHistoryMessages(rawMsgs) {
+                    let msgId = msgIdCounter;
+                    let currentAssistant = null;
+                    for (const raw of rawMsgs) {
+                        if (raw.role === 'user') {
+                            currentAssistant = null;
+                            messages.push({
+                                id: ++msgId, role: 'user', content: raw.content || '',
+                            });
+                        } else if (raw.role === 'assistant') {
+                            // 如果没有当前 assistant 消息，创建新的
+                            if (!currentAssistant) {
+                                currentAssistant = reactive({
+                                    id: ++msgId, role: 'assistant',
+                                    segments: [],
+                                    reasoning: '', reasoningOpen: true, thinking: false,
+                                    applying: false, interrupted: false, copiedField: '',
+                                });
+                                messages.push(currentAssistant);
+                            }
+                            // 有文本内容则追加文本 segment
+                            if (raw.content) {
+                                currentAssistant.segments.push({ type: 'text', content: raw.content });
+                            }
+                            // 解析 tool_calls，追加工具 segment
+                            if (raw.tool_calls) {
+                                for (const tc of raw.tool_calls) {
+                                    currentAssistant.segments.push({
+                                        type: 'tool',
+                                        name: tc.function?.name || 'unknown',
+                                        detail: '',
+                                        status: 'done',
+                                        open: false,
+                                        call_id: tc.id,
+                                    });
+                                }
+                            }
+                        } else if (raw.role === 'tool') {
+                            // 将 tool 结果附加到匹配的工具 segment
+                            if (currentAssistant) {
+                                const toolSeg = currentAssistant.segments.find(s => s.type === 'tool' && s.call_id === raw.tool_call_id);
+                                if (toolSeg) {
+                                    toolSeg.detail = raw.content || '';
+                                    // 检查是否为 config_preview（generate_* 函数返回的 JSON）
+                                    try {
+                                        const cfg = JSON.parse(raw.content);
+                                        if (cfg.config_json || cfg.cli_command) {
+                                            cfg.copiedField = '';
+                                            currentAssistant.segments.push({ type: 'config', config: cfg });
+                                        }
+                                    } catch (e) {}
+                                } else {
+                                    // 无匹配的 tool_call_id，作为独立工具结果展示
+                                    currentAssistant.segments.push({
+                                        type: 'tool', name: '结果', detail: raw.content || '',
+                                        status: 'done', open: false,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    msgIdCounter = msgId;
+                    nextTick(() => forceScrollToBottom());
+                }
+
+                async function deleteSession(id) {
+                    if (!confirm('确定删除此会话？')) return;
+                    try {
+                        const resp = await apiFetch('/api/sessions/' + id, { method: 'DELETE' });
+                        if (resp.ok) {
+                            const idx = sessions.findIndex(s => s.id === id);
+                            if (idx >= 0) sessions.splice(idx, 1);
+                            if (currentSessionId.value === id) {
+                                if (sessions.length > 0) {
+                                    await switchSession(sessions[0].id);
+                                } else {
+                                    await createSession();
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                // === 聊天 ===
+                async function send() {
+                    const message = inputText.value.trim();
+                    if (!message || isStreaming.value || !currentSessionId.value) return;
+
+                    isStreaming.value = true;
+                    inputText.value = '';
+                    nextTick(() => autoResize());
+
+                    const sessionId = currentSessionId.value;
+
+                    messages.push({ id: ++msgIdCounter, role: 'user', content: message });
+
+                    const assistantMsg = reactive({
+                        id: ++msgIdCounter, role: 'assistant', segments: [], reasoning: '',
+                        reasoningOpen: true, thinking: true,
+                        applying: false, interrupted: false, copiedField: '',
+                    });
+                    messages.push(assistantMsg);
+                    forceScrollToBottom();
+
+                    const controller = new AbortController();
+                    streamingMap.set(sessionId, { abortController: controller, assistantMsg });
+
+                    try {
+                        const resp = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ session_id: sessionId, message }),
+                            signal: controller.signal,
+                        });
+
+                        if (resp.status === 401) {
+                            authState.value = 'login';
+                            return;
+                        }
+
+                        const reader = resp.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+                        const scrollIfCurrent = () => { if (currentSessionId.value === sessionId) scrollToBottom(); };
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+
+                            for (const line of lines) {
+                                if (!line.startsWith('data: ')) continue;
+                                const data = line.slice(6);
+                                if (data === '{"type":"done"}') continue;
+                                try {
+                                    const evt = JSON.parse(data);
+                                    if (evt.type === 'delta') {
+                                        assistantMsg.thinking = false;
+                                        const last = assistantMsg.segments[assistantMsg.segments.length - 1];
+                                        if (last && last.type === 'text') {
+                                            last.content += evt.data;
+                                        } else {
+                                            assistantMsg.segments.push({ type: 'text', content: evt.data });
+                                        }
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'reasoning') {
+                                        assistantMsg.reasoning += evt.data;
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'tool_start') {
+                                        assistantMsg.segments.push({ type: 'tool', name: evt.data, detail: '', status: 'running', open: false });
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'tool_end') {
+                                        const lastTool = [...assistantMsg.segments].reverse().find(s => s.type === 'tool' && s.status === 'running');
+                                        if (lastTool) {
+                                            lastTool.detail = evt.data;
+                                            lastTool.status = 'done';
+                                        } else {
+                                            assistantMsg.segments.push({ type: 'tool', name: '结果', detail: evt.data, status: 'done', open: false });
+                                        }
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'config_preview') {
+                                        const lastTool = [...assistantMsg.segments].reverse().find(s => s.type === 'tool' && s.status === 'running');
+                                        if (lastTool) lastTool.status = 'done';
+                                        try {
+                                            const cfg = JSON.parse(evt.data);
+                                            cfg.copiedField = '';
+                                            assistantMsg.segments.push({ type: 'config', config: cfg });
+                                        } catch (e) {}
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'error') {
+                                        assistantMsg.segments.push({ type: 'tool', name: '错误', detail: evt.data, status: 'error', open: true });
+                                        scrollIfCurrent();
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        assistantMsg.thinking = false;
+                        if (!assistantMsg.segments.length) {
+                            assistantMsg.segments.push({ type: 'text', content: '(无响应)' });
+                        }
+                        loadSessions();
+                    } catch (e) {
+                        assistantMsg.thinking = false;
+                        if (e.name === 'AbortError') {
+                            assistantMsg.interrupted = true;
+                        } else {
+                            assistantMsg.segments.push({ type: 'text', content: '请求失败: ' + e.message });
+                        }
+                    } finally {
+                        streamingMap.delete(sessionId);
+                        if (currentSessionId.value === sessionId) {
+                            isStreaming.value = false;
+                        }
+                    }
+                }
+
+                function stopStreaming() {
+                    const sessionId = currentSessionId.value;
+                    const entry = streamingMap.get(sessionId);
+                    if (entry) {
+                        entry.abortController.abort();
+                        streamingMap.delete(sessionId);
+                        isStreaming.value = false;
+                    }
+                }
+
+                // === 配置管理 ===
+                async function loadConfig() {
+                    try {
+                        const resp = await apiFetch('/api/config');
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            const cfg = data.config || {};
+                            // 合并配置到表单
+                            if (cfg.llm) {
+                                configForm.llm.api_key = cfg.llm.api_key || '';
+                                configForm.llm.base_url = cfg.llm.base_url || '';
+                                configForm.llm.model = cfg.llm.model || '';
+                                configForm.llm.thinking = cfg.llm.thinking || {};
+                                configForm.llm.reasoning_effort = cfg.llm.reasoning_effort || 'max';
+                                configForm.llm.max_tokens = cfg.llm.max_tokens || 65536;
+                                configForm.llm.temperature = cfg.llm.temperature !== undefined ? cfg.llm.temperature : 1.0;
+                                configForm.llm.do_sample = cfg.llm.do_sample || false;
+                            }
+                            if (cfg.jxwaf) {
+                                configForm.jxwaf.api_url = cfg.jxwaf.api_url || '';
+                                configForm.jxwaf.waf_auth = cfg.jxwaf.waf_auth || '';
+                                configForm.jxwaf.group = cfg.jxwaf.group || 'default';
+                            }
+                            configForm.verify_url = cfg.verify_url || '';
+                        }
+                    } catch (e) {}
+                }
+
+                async function saveConfig() {
+                    configSaving.value = true;
+                    configMessage.value = '';
+                    try {
+                        const resp = await apiFetch('/api/config', {
+                            method: 'PUT',
+                            body: JSON.stringify({ config: configForm }),
+                        });
+                        if (resp.ok) {
+                            configMessage.value = '保存成功';
+                            configMessageType.value = 'success';
+                        } else {
+                            const text = await resp.text();
+                            configMessage.value = '保存失败: ' + text;
+                            configMessageType.value = 'error';
+                        }
+                    } catch (e) {
+                        configMessage.value = '网络错误: ' + e.message;
+                        configMessageType.value = 'error';
+                    } finally {
+                        configSaving.value = false;
+                        setTimeout(() => { configMessage.value = ''; }, 3000);
+                    }
+                }
+
+                // === 主题 ===
+                function applyTheme() {
+                    let dark;
+                    if (theme.value === 'auto') {
+                        dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    } else {
+                        dark = theme.value === 'dark';
+                    }
+                    document.documentElement.classList.toggle('dark', dark);
+                    document.documentElement.classList.toggle('light', !dark);
+                }
+
+                function cycleTheme() {
+                    const order = { light: 'dark', dark: 'auto', auto: 'light' };
+                    theme.value = order[theme.value] || 'light';
+                    localStorage.setItem('theme', theme.value);
+                    applyTheme();
+                }
+
+                // === 菜单 ===
+                function switchMenu(menu) {
+                    activeMenu.value = menu;
+                    if (menu === 'config') {
+                        loadConfig();
+                    }
+                }
+
+                // === 生命周期 ===
+                let mediaQueryListener = null;
+
+                onMounted(() => {
+                    applyTheme();
+                    // 监听系统主题变化（auto 模式）
+                    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                    mediaQueryListener = () => {
+                        if (theme.value === 'auto') applyTheme();
+                    };
+                    if (mq.addEventListener) {
+                        mq.addEventListener('change', mediaQueryListener);
+                    } else if (mq.addListener) {
+                        mq.addListener(mediaQueryListener);
+                    }
+                    checkAuth();
+                    loadTemplates();
+                });
+
+                return {
+                    // 认证
+                    authState, username, loginForm, registerForm, authTab, authError, authLoading,
+                    loginInputRef, otpQrcodeRef, doLogin, doRegister, logout, onToggleOTP,
+                    // 菜单
+                    activeMenu, switchMenu,
+                    // 主题
+                    theme, themeLabel, cycleTheme,
+                    // 会话
+                    sessions, currentSessionId, sessionSearch, filteredSessions, groupedSessions,
+                    loadSessions, createSession, switchSession, deleteSession,
+                    // 聊天
+                    messages, inputText, isStreaming, chatContainer, inputRef,
+                    send, stopStreaming, handleKey, autoResize, fillTemplate, forceScrollToBottom,
+                    renderMarkdown, highlightCode, typeLabel, getAction, copyText, applyConfig,
+                    // 配置
+                    configForm, configSaving, configMessage, configMessageType,
+                    thinkingEnabled, loadConfig, saveConfig,
+                    // 模板
+                    templates,
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

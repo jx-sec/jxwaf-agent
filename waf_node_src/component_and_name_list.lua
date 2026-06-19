@@ -1,5 +1,5 @@
 --[[
-JxWAF 防护组件与名单防护节点逻辑
+JXWAF 防护组件与名单防护节点逻辑
 
 本文件整理自节点源码 waf.lua 中的 base_component 与 global_name_list 函数，
 供 AI 深度排查时参考。实际运行环境为 OpenResty + ngx.lua。

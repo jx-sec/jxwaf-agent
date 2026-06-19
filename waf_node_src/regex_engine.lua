@@ -1,5 +1,5 @@
 --[[
-JxWAF 规则匹配引擎
+JXWAF 规则匹配引擎
 
 本文件整合自节点源码 operator.lua（匹配运算符）与 preprocess.lua（参数预处理），
 供 AI 深度排查时理解匹配逻辑。实际运行环境为 OpenResty + ngx.lua。

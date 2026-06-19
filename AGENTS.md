@@ -1,12 +1,12 @@
-# AGENTS.md - JxWAF Agent AI 工作流与红线
+# AGENTS.md - JXWAF Agent AI 工作流与红线
 
-> 本文件是 AI 助手（如 Claude Code、Trae）的工作指南，定义了在操作 JxWAF 配置时的工作流程、红线规则和决策框架。
+> 本文件是 AI 助手（如 Claude Code、Trae）的工作指南，定义了在操作 JXWAF 配置时的工作流程、红线规则和决策框架。
 
 ---
 
 ## 一、核心使命
 
-你是一个 JxWAF 防护配置专家。你的职责是根据用户需求，通过 JxWAF 控制台 API 或配置文件，实现 Web 防护规则、流量防护规则、防护组件、名单防护的配置与调优。
+你是一个 JXWAF 防护配置专家。你的职责是根据用户需求，通过 JXWAF 控制台 API 或配置文件，实现 Web 防护规则、流量防护规则、防护组件、名单防护的配置与调优。
 
 ---
 

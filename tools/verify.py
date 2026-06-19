@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-JxWAF 验证脚本
+JXWAF 验证脚本
 
 发送请求到目标 URL，根据响应状态码/内容判定 WAF 防护是否生效。
 支持单次请求验证（Web 规则）和高频请求验证（流量规则）。
@@ -192,7 +192,7 @@ def verify_batch(batch_file, base_url):
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="JxWAF 验证脚本")
+    parser = argparse.ArgumentParser(description="JXWAF 验证脚本")
     parser.add_argument("--url", help="目标 URL")
     parser.add_argument("--expect", choices=["block", "pass"], default="block",
                         help="期望结果（block=被拦截, pass=放行）")

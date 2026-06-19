@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-JxWAF 控制台 CLI 工具
+JXWAF 控制台 CLI 工具
 
-对接 JxWAF 控制台 API，支持 Web 防护规则、流量防护规则、防护组件、名单防护的管理操作。
+对接 JXWAF 控制台 API，支持 Web 防护规则、流量防护规则、防护组件、名单防护的管理操作。
 配置从 config.env 或环境变量读取。
 
 用法示例：
@@ -87,7 +87,7 @@ def load_config():
 # ============================================================================
 
 def api_request(config, path, data=None, use_waf_auth=False):
-    """发送 POST 请求到 JxWAF 控制台 API"""
+    """发送 POST 请求到 JXWAF 控制台 API"""
     base_url = config.get("JXWAF_API_URL", "").rstrip("/")
     if not base_url:
         print("错误：JXWAF_API_URL 未配置，请检查 config.env", file=sys.stderr)
@@ -540,7 +540,7 @@ def cmd_flow_white_rule(args, config):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="JxWAF 控制台 CLI 工具",
+        description="JXWAF 控制台 CLI 工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="module", help="功能模块")

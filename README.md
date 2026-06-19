@@ -1,6 +1,6 @@
-# JxWAF Agent
+# JXWAF Agent
 
-JxWAF 自动化配置与验证工具集，支持通过 AI 助手（Claude Code、Trae 等）完成 Web 防护规则、流量防护规则、防护组件、名单防护的开发与运维。
+JXWAF 自动化配置与验证工具集，支持通过 AI 助手（Claude Code、Trae 等）完成 Web 防护规则、流量防护规则、防护组件、名单防护的开发与运维。
 
 ## 项目结构
 
@@ -9,21 +9,22 @@ jxwaf-agent/
 ├── AGENTS.md                # AI 工作流与红线定义
 ├── README.md                # 项目说明（本文件）
 ├── docs/                    # 知识库（纯文本，供 AI 查阅）
-│   ├── waf_manual.md        # JxWAF 配置说明（字段、动作、正则引擎、组件、名单、白名单）
+│   ├── waf_manual.md        # JXWAF 配置说明（字段、动作、正则引擎、组件、名单、白名单）
 │   ├── playbook.md          # 运维 SOP（误报处理、漏报排查、规则调优、白名单 SOP）
 │   └── security_profiles.md # 安全规则配置档案（已实施的漏洞防护方案）
-├── generated/               # AI 生成的配置制品存放目录
-│   ├── rules/               # 防护规则（web/flow/web_white/flow_white）
-│   ├── components/          # 防护组件（code.lua + conf.json）
-│   ├── name_lists/          # 名单防护（meta.json + items.txt）
-│   └── solutions/           # 联合判断完整方案
-├── waf_node_src/            # 节点核心处理源码（供 AI 深度排查）
+├── generated/               # AI 生成的配置制品存放目录（按项目归档，详见 generated/README.md）
+│   ├── <project_name>/      # 每个需求一个独立目录（如 cc_attack_defense）
+│   │   ├── components/      # 该项目涉及的防护组件（code.lua + code.base64 + conf.json）
+│   │   ├── rules/           # 该项目涉及的防护规则（web_rules/flow_rules/web_white_rules/flow_white_rules）
+│   │   └── name_lists/      # 该项目涉及的名单（meta.json + items.txt）
+│   └── README.md            # 制品存储规范与部署流程
+├── waf_node_src/            # 节点核心处理源码（供 AI 深度排查，禁止修改）
 │   ├── access_rule.lua      # Web/流量规则 + 白名单检测逻辑
 │   ├── regex_engine.lua     # 匹配引擎（参数预处理 + 运算符）
 │   ├── component_and_name_list.lua  # 防护组件与名单防护逻辑
 │   └── component_example.lua # 组件代码示例（CDN 源 IP 提取）
 ├── tools/                   # 工具箱（独立可执行脚本）
-│   ├── waf_cli.py           # 对接 JxWAF 控制台 API（含白名单子命令）
+│   ├── waf_cli.py           # 对接 JXWAF 控制台 API（含白名单子命令）
 │   └── verify.py            # 验证脚本（发请求 + 判定）
 ├── tests/                   # 测试用例库
 │   └── payloads.json        # 攻击 payload 与验证用例（含白名单用例）
@@ -48,8 +49,13 @@ jxwaf-agent/
 
 ### 1. 配置环境
 
+编辑 `config.env` 填写实际的 JXWAF 控制台 API 地址和 Token：
+
 ```bash
-cp config.env config.env  # 编辑填写实际 API 地址和 Token
+# JXWAF_API_URL：控制台 API 地址（专业版）
+# JXWAF_WAF_AUTH：WAF 认证 Token（在控制台「系统配置」中获取）
+# JXWAF_GROUP：默认分组名（专业版域名分组，标准版可忽略）
+# JXWAF_VERIFY_URL：verify.py 默认验证目标 URL
 ```
 
 ### 2. 使用 CLI 管理规则
@@ -96,11 +102,13 @@ python tools/verify.py --batch tests/payloads.json --base-url https://demo.jxwaf
 
 将本项目目录提供给 Claude Code 或 Trae 等 AI 助手，AI 会：
 
-1. 阅读 `AGENTS.md` 了解工作流和红线
+1. 阅读 `AGENTS.md` 了解工作流和红线规则
 2. 查阅 `docs/waf_manual.md` 获取字段定义和 API 接口
 3. 参考 `waf_node_src/` 理解节点检测逻辑
-4. 使用 `tools/waf_cli.py` 创建/编辑配置
-5. 使用 `tools/verify.py` 验证配置效果
+4. 按 `generated/README.md` 规范将配置制品归档到 `generated/<project_name>/`
+5. 使用 `tools/waf_cli.py` 创建/编辑配置
+6. 使用 `tools/verify.py` 验证配置效果
+7. 在 `docs/security_profiles.md` 记录完整规则档案
 
 示例指令：
 - "帮我创建一条 Web 防护规则，拦截所有访问 /phpmyadmin 的请求"
@@ -110,7 +118,7 @@ python tools/verify.py --batch tests/payloads.json --base-url https://demo.jxwaf
 
 ## 参考资料
 
-本项目基于 JxWAF 专业版/标准版节点源码与控制台代码整理，涵盖：
+本项目基于 JXWAF 专业版/标准版节点源码与控制台代码整理，涵盖：
 - 规则引擎：匹配参数、参数预处理、匹配运算符
 - Web 防护规则：即时匹配检测
 - 流量防护规则：频率统计与处罚缓存
