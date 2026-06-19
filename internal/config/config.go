@@ -27,11 +27,26 @@ type JXWAFConfig struct {
 	Group   string `json:"group"`
 }
 
+// CloudEnvConfig 云端验证环境配置
+type CloudEnvConfig struct {
+	Enabled     bool   `json:"enabled"`
+	APIURL      string `json:"api_url"`
+	WafAuth     string `json:"waf_auth"`
+	VerifyURL   string `json:"verify_url"`
+	AutoCleanup bool   `json:"auto_cleanup"`
+}
+
+// AgentConfig Agent 运行参数
+type AgentConfig struct {
+	MaxIterations int `json:"max_iterations"`
+}
+
 // UserConfig 用户配置（存入 user_configs.config_json）
 type UserConfig struct {
-	LLM       LLMConfig   `json:"llm"`
-	JXWAF     JXWAFConfig `json:"jxwaf"`
-	VerifyURL string      `json:"verify_url"`
+	LLM      LLMConfig      `json:"llm"`
+	JXWAF    JXWAFConfig    `json:"jxwaf"`
+	CloudEnv CloudEnvConfig `json:"cloud_env"`
+	Agent    AgentConfig    `json:"agent"`
 }
 
 // DefaultUserConfig 全局默认配置（从 config.json 的 default_config 加载，启动时注入）

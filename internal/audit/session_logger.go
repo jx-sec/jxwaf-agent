@@ -47,14 +47,20 @@ func (l *SessionLogger) getFile(sessionID string) *os.File {
 
 // Log 记录一条会话日志
 func (l *SessionLogger) Log(sessionID, eventType, data string) {
+	l.LogWithUser(sessionID, "", eventType, data)
+}
+
+// LogWithUser 记录一条带用户名的会话日志
+func (l *SessionLogger) LogWithUser(sessionID, username, eventType, data string) {
 	f := l.getFile(sessionID)
 	if f == nil {
 		return
 	}
 	entry := map[string]any{
-		"time": time.Now().Format(time.RFC3339),
-		"type": eventType,
-		"data": data,
+		"time":     time.Now().Format(time.RFC3339),
+		"type":     eventType,
+		"user":     username,
+		"data":     data,
 	}
 	b, _ := json.Marshal(entry)
 	l.mu.Lock()

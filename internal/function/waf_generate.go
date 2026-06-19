@@ -4,29 +4,46 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"jxwaf-agent-go/internal/jxwaf"
 )
 
 // scriptResult 脚本生成结果（推送给前端作为 config_preview 事件数据）
 type scriptResult struct {
-	ScriptType  string `json:"script_type"` // web_rule | flow_rule | component | name_list
+	ScriptType  string `json:"script_type"`  // web_rule | flow_rule | component | name_list | web_white | flow_white
 	Name        string `json:"name"`
 	Detail      string `json:"detail"`
-	ConfigJSON  string `json:"config_json"` // 完整配置 JSON
+	ConfigJSON  string `json:"config_json"`  // 完整配置 JSON（backup 导出格式数组）
 	CodeLua     string `json:"code_lua,omitempty"`
 	ConfJSON    string `json:"conf_json,omitempty"`
-	Base64Cmd   string `json:"base64_cmd,omitempty"`
 	Explanation string `json:"explanation"`
+	LoadHint    string `json:"load_hint"`     // 用户导入说明
 }
 
-// GenerateWebRuleScriptFunc 生成 Web 防护规则配置脚本（不执行）
+// testCase 测试用例（云端验证用）
+type testCase struct {
+	Name    string         `json:"name"`
+	Method  string         `json:"method"`
+	Path    string         `json:"path"`
+	Headers map[string]any `json:"headers,omitempty"`
+	Body    string         `json:"body,omitempty"`
+	Assert  testAssert     `json:"assert"`
+}
+
+type testAssert struct {
+	Type           string `json:"type"` // block | pass | extract
+	ExpectedStatus int    `json:"expected_status,omitempty"`
+	Field          string `json:"field,omitempty"`
+	ExpectedValue  string `json:"expected_value,omitempty"`
+}
+
+// =============================================================================
+// GenerateWebRuleScriptFunc：生成 Web 防护规则（输出 backup 格式数组）
+// =============================================================================
 type GenerateWebRuleScriptFunc struct{}
 
 func (f *GenerateWebRuleScriptFunc) Name() string { return "generate_web_rule_script" }
 
 func (f *GenerateWebRuleScriptFunc) Description() string {
-	return "生成 Web 防护规则配置脚本（仅预览不执行）。用户确认后通过 create_web_rule 应用到 WAF。新规则默认 watch 模式。"
+	return "生成 Web 防护规则配置（backup 导出格式数组）。用户复制后通过「加载Web规则」导入。新规则默认 watch 模式。"
 }
 
 func (f *GenerateWebRuleScriptFunc) Schema() map[string]any {
@@ -55,7 +72,7 @@ func (f *GenerateWebRuleScriptFunc) Schema() map[string]any {
 						},
 						"args_prepocess": map[string]any{
 							"type":        "array",
-							"items":        map[string]any{"type": "string"},
+							"items":       map[string]any{"type": "string"},
 							"description": "参数预处理：none/lowerCase/base64Decode/uriDecode/uniDecode/hexDecode",
 						},
 						"match_operator": map[string]any{"type": "string", "description": "匹配运算符：str_contain/str_eq/str_prefix/rx/ip_in_cidr/status_check 等"},
@@ -69,6 +86,27 @@ func (f *GenerateWebRuleScriptFunc) Schema() map[string]any {
 				"default":     "watch",
 				"description": "动作，新规则建议 watch",
 			},
+			"test_cases": map[string]any{
+				"type":        "array",
+				"description": "测试用例（云端验证用），至少 1 条攻击流量 + 1 条正常流量",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"name":      map[string]any{"type": "string", "description": "用例名称"},
+						"method":    map[string]any{"type": "string", "description": "HTTP 方法", "default": "GET"},
+						"path":      map[string]any{"type": "string", "description": "请求路径"},
+						"headers":   map[string]any{"type": "object", "description": "请求头"},
+						"body":      map[string]any{"type": "string", "description": "请求体"},
+						"assert": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"type":            map[string]any{"type": "string", "enum": []string{"block", "pass"}, "description": "block=应被拦截, pass=应放行"},
+								"expected_status": map[string]any{"type": "integer", "description": "期望的 HTTP 状态码"},
+							},
+						},
+					},
+				},
+			},
 		},
 		"required": []string{"name", "detail", "matchs"},
 	}
@@ -79,43 +117,51 @@ func (f *GenerateWebRuleScriptFunc) Execute(ctx context.Context, args map[string
 	detail, _ := args["detail"].(string)
 	action, _ := args["action"].(string)
 	actionValue, _ := args["action_value"].(string)
-	// 红线：新规则默认 watch
 	if action == "" {
 		action = "watch"
 	}
 
-	// 解析匹配条件（Match 的 JSON tag 与 Schema 一致，可安全转换）
-	var matchs []jxwaf.Match
+	// 解析匹配条件
+	var matchs []any
 	if raw, ok := args["matchs"]; ok {
 		b, _ := json.Marshal(raw)
 		json.Unmarshal(b, &matchs)
 	}
+	if matchs == nil {
+		matchs = []any{}
+	}
 
-	configJSON, _ := json.MarshalIndent(map[string]any{
+	// 备份导出格式：纯数组
+	rules := []map[string]any{{
 		"rule_name":    name,
 		"rule_detail":  detail,
 		"rule_matchs":  matchs,
 		"rule_action":  action,
 		"action_value": actionValue,
-	}, "", "  ")
+	}}
+
+	configJSON, _ := json.MarshalIndent(rules, "", "  ")
 
 	result := scriptResult{
 		ScriptType:  "web_rule",
 		Name:        name,
 		Detail:      detail,
 		ConfigJSON:  string(configJSON),
+		LoadHint:    "复制上方 JSON，在控制台「Web防护规则 → 加载」中粘贴导入。专业版需先选择域名分组。",
 		Explanation: fmt.Sprintf("Web 防护规则 %s（action=%s）。匹配条件 %d 组。", name, action, len(matchs)),
 	}
 	return toJSON(result), nil
 }
 
-// GenerateFlowRuleScriptFunc 生成流量防护规则配置脚本（不执行）
+// =============================================================================
+// GenerateFlowRuleScriptFunc：生成流量防护规则（输出 backup 格式数组）
+// =============================================================================
 type GenerateFlowRuleScriptFunc struct{}
 
 func (f *GenerateFlowRuleScriptFunc) Name() string { return "generate_flow_rule_script" }
 
 func (f *GenerateFlowRuleScriptFunc) Description() string {
-	return "生成流量防护规则配置脚本（仅预览不执行）。用户确认后通过 create_flow_rule 应用到 WAF。exceed_count 不低于业务峰值 QPS 的 2 倍。"
+	return "生成流量防护规则配置（backup 导出格式数组）。用户复制后通过「加载流量规则」导入。exceed_count 不低于业务峰值 QPS 的 2 倍。"
 }
 
 func (f *GenerateFlowRuleScriptFunc) Schema() map[string]any {
@@ -142,6 +188,28 @@ func (f *GenerateFlowRuleScriptFunc) Schema() map[string]any {
 			"stat_time":    map[string]any{"type": "integer", "description": "统计时间窗口（秒）"},
 			"exceed_count": map[string]any{"type": "integer", "description": "触发阈值"},
 			"block_time":   map[string]any{"type": "integer", "description": "处罚持续时间（秒）"},
+			"test_cases": map[string]any{
+				"type":        "array",
+				"description": "测试用例（云端验证用），包含高频请求验证",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"name":    map[string]any{"type": "string"},
+						"method":  map[string]any{"type": "string", "default": "GET"},
+						"path":    map[string]any{"type": "string"},
+						"headers": map[string]any{"type": "object"},
+						"assert": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"type":            map[string]any{"type": "string", "enum": []string{"block", "pass"}},
+								"expected_status": map[string]any{"type": "integer"},
+							},
+						},
+						"flow_count":    map[string]any{"type": "integer", "description": "流量规则测试请求次数", "default": 10},
+						"flow_interval": map[string]any{"type": "number", "description": "请求间隔（秒）", "default": 0.1},
+					},
+				},
+			},
 		},
 		"required": []string{"name", "detail", "action", "filter", "entity", "stat_time", "exceed_count", "block_time"},
 	}
@@ -154,25 +222,29 @@ func (f *GenerateFlowRuleScriptFunc) Execute(ctx context.Context, args map[strin
 	actionValue, _ := args["action_value"].(string)
 	filter, _ := args["filter"].(string)
 
-	// 解析匹配条件
-	var matchs []jxwaf.Match
+	var matchs []any
 	if raw, ok := args["matchs"]; ok {
 		b, _ := json.Marshal(raw)
 		json.Unmarshal(b, &matchs)
 	}
+	if matchs == nil {
+		matchs = []any{}
+	}
 
-	// 解析统计对象
-	var entity []jxwaf.MatchArg
+	var entity []any
 	if raw, ok := args["entity"]; ok {
 		b, _ := json.Marshal(raw)
 		json.Unmarshal(b, &entity)
+	}
+	if entity == nil {
+		entity = []any{}
 	}
 
 	statTime, _ := args["stat_time"].(float64)
 	exceedCount, _ := args["exceed_count"].(float64)
 	blockTime, _ := args["block_time"].(float64)
 
-	configJSON, _ := json.MarshalIndent(map[string]any{
+	rules := []map[string]any{{
 		"rule_name":    name,
 		"rule_detail":  detail,
 		"rule_matchs":  matchs,
@@ -183,26 +255,31 @@ func (f *GenerateFlowRuleScriptFunc) Execute(ctx context.Context, args map[strin
 		"stat_time":    int(statTime),
 		"exceed_count": int(exceedCount),
 		"block_time":   int(blockTime),
-	}, "", "  ")
+	}}
+
+	configJSON, _ := json.MarshalIndent(rules, "", "  ")
 
 	result := scriptResult{
 		ScriptType:  "flow_rule",
 		Name:        name,
 		Detail:      detail,
 		ConfigJSON:  string(configJSON),
+		LoadHint:    "复制上方 JSON，在控制台「流量防护规则 → 加载」中粘贴导入。专业版需先选择域名分组。",
 		Explanation: fmt.Sprintf("流量防护规则 %s（%ds 内超过 %d 次 → %s %s）。",
 			name, int(statTime), int(exceedCount), action, actionValue),
 	}
 	return toJSON(result), nil
 }
 
-// GenerateComponentScriptFunc 生成防护组件配置脚本（不执行）
+// =============================================================================
+// GenerateComponentScriptFunc：生成防护组件（输出 backup 格式数组）
+// =============================================================================
 type GenerateComponentScriptFunc struct{}
 
 func (f *GenerateComponentScriptFunc) Name() string { return "generate_component_script" }
 
 func (f *GenerateComponentScriptFunc) Description() string {
-	return "生成防护组件配置脚本（仅预览不执行）。code_lua 为 Lua 源码，用户确认后通过 create_component 应用到 WAF。必须兼容 LuaJIT（Lua 5.1），禁止使用 & | ~ >> << // goto 等语法。"
+	return "生成防护组件配置（backup 导出格式数组）。用户复制后通过「组件 → 加载」导入。必须兼容 LuaJIT（Lua 5.1），禁止使用 & | ~ >> << // goto 等语法。"
 }
 
 func (f *GenerateComponentScriptFunc) Schema() map[string]any {
@@ -212,7 +289,7 @@ func (f *GenerateComponentScriptFunc) Schema() map[string]any {
 			"name":     map[string]any{"type": "string", "description": "组件名（小写下划线）"},
 			"detail":   map[string]any{"type": "string", "description": "组件描述"},
 			"code_lua": map[string]any{"type": "string", "description": "Lua 源码，必须返回包含 check(conf_data) 函数的 table"},
-			"conf":     map[string]any{"type": "string", "description": "组件配置 JSON 字符串"},
+			"conf":     map[string]any{"type": "string", "description": "组件配置 JSON 字符串", "default": "{}"},
 		},
 		"required": []string{"name", "detail", "code_lua"},
 	}
@@ -223,35 +300,45 @@ func (f *GenerateComponentScriptFunc) Execute(ctx context.Context, args map[stri
 	detail, _ := args["detail"].(string)
 	codeLua, _ := args["code_lua"].(string)
 	conf, _ := args["conf"].(string)
+	if conf == "" {
+		conf = "{}"
+	}
 
 	if name == "" || codeLua == "" {
 		return "", fmt.Errorf("name 和 code_lua 不能为空")
 	}
 
-	// 生成 Base64 编码命令
-	base64Cmd := fmt.Sprintf("python3 -c \"import base64; print(base64.b64encode(open('generated/<project>/components/%s/code.lua','rb').read()).decode('ascii'))\" > generated/<project>/components/%s/code.base64",
-		name, name)
+	rules := []map[string]any{{
+		"name":   name,
+		"detail": detail,
+		"code":   codeLua,
+		"conf":   conf,
+	}}
+
+	configJSON, _ := json.MarshalIndent(rules, "", "  ")
 
 	result := scriptResult{
 		ScriptType:  "component",
 		Name:        name,
 		Detail:      detail,
-		ConfigJSON:  conf,
+		ConfigJSON:  string(configJSON),
 		CodeLua:     codeLua,
 		ConfJSON:    conf,
-		Base64Cmd:   base64Cmd,
+		LoadHint:    "复制上方 JSON，在控制台「防护组件 → 加载」中粘贴导入。Lua 代码必须兼容 LuaJIT（Lua 5.1）。",
 		Explanation: fmt.Sprintf("防护组件 %s。Lua 代码 %d 字节，请确认兼容 LuaJIT（Lua 5.1）。", name, len(codeLua)),
 	}
 	return toJSON(result), nil
 }
 
-// GenerateNameListScriptFunc 生成名单防护配置脚本（不执行）
+// =============================================================================
+// GenerateNameListScriptFunc：生成名单防护（输出 backup 格式数组）
+// =============================================================================
 type GenerateNameListScriptFunc struct{}
 
 func (f *GenerateNameListScriptFunc) Name() string { return "generate_name_list_script" }
 
 func (f *GenerateNameListScriptFunc) Description() string {
-	return "生成名单防护配置脚本（仅预览不执行）。用户确认后通过 create_name_list 应用到 WAF。临时名单必须设置过期时间。"
+	return "生成名单防护配置（backup 导出格式数组）。用户复制后通过「全局名单 → 加载」导入。临时名单必须设置过期时间。"
 }
 
 func (f *GenerateNameListScriptFunc) Schema() map[string]any {
@@ -281,7 +368,7 @@ func (f *GenerateNameListScriptFunc) Schema() map[string]any {
 			"expire_time":  map[string]any{"type": "string", "description": "过期时间（秒），expire=true 时生效", "default": "0"},
 			"items": map[string]any{
 				"type":        "array",
-				"items":        map[string]any{"type": "string"},
+				"items":       map[string]any{"type": "string"},
 				"description": "名单条目列表（如 IP 地址），可选",
 			},
 		},
@@ -303,14 +390,16 @@ func (f *GenerateNameListScriptFunc) Execute(ctx context.Context, args map[strin
 		expireTime = "0"
 	}
 
-	// 解析查找规则
-	var rule []jxwaf.MatchArg
+	var rule []any
 	if raw, ok := args["rule"]; ok {
 		b, _ := json.Marshal(raw)
 		json.Unmarshal(b, &rule)
 	}
+	if rule == nil {
+		rule = []any{}
+	}
 
-	// 提取条目列表（可选）
+	// 提取条目
 	items := []string{}
 	if rawItems, ok := args["items"].([]any); ok {
 		for _, it := range rawItems {
@@ -320,7 +409,7 @@ func (f *GenerateNameListScriptFunc) Execute(ctx context.Context, args map[strin
 		}
 	}
 
-	configJSON, _ := json.MarshalIndent(map[string]any{
+	rules := []map[string]any{{
 		"name_list_name":        name,
 		"name_list_detail":      detail,
 		"name_list_rule":        rule,
@@ -328,14 +417,13 @@ func (f *GenerateNameListScriptFunc) Execute(ctx context.Context, args map[strin
 		"action_value":          actionValue,
 		"name_list_expire":      expire,
 		"name_list_expire_time": expireTime,
-		"items":                 items,
-	}, "", "  ")
+	}}
 
-	expireHint := ""
+	configJSON, _ := json.MarshalIndent(rules, "", "  ")
+
+	expireHint := "永久名单。"
 	if expire == "true" {
 		expireHint = fmt.Sprintf("临时名单，过期时间 %s 秒。", expireTime)
-	} else {
-		expireHint = "永久名单。"
 	}
 
 	result := scriptResult{
@@ -343,6 +431,7 @@ func (f *GenerateNameListScriptFunc) Execute(ctx context.Context, args map[strin
 		Name:        name,
 		Detail:      detail,
 		ConfigJSON:  string(configJSON),
+		LoadHint:    "复制上方 JSON，在控制台「全局名单 → 加载」中粘贴导入。条目需在名单创建后单独添加。",
 		Explanation: fmt.Sprintf("名单防护 %s（action=%s）。%s 条目 %d 个。", name, action, expireHint, len(items)),
 	}
 	return toJSON(result), nil

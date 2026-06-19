@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"jxwaf-agent-go/internal/agent"
+	"jxwaf-agent-go/internal/audit"
 	"jxwaf-agent-go/internal/auth"
 	"jxwaf-agent-go/internal/config"
 	"jxwaf-agent-go/internal/db"
@@ -373,7 +374,7 @@ func ClearSessionHandler(sm *agent.SessionManager) http.HandlerFunc {
 
 // ChatHandler /api/chat SSE 流式响应
 // 按用户配置动态创建 LLM 客户端和 JXWAF 客户端，再创建临时 Agent 执行
-func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.SessionManager) http.HandlerFunc {
+func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.SessionManager, auditLog *audit.Logger, sessionLog *audit.SessionLogger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -390,7 +391,7 @@ func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.
 			return
 		}
 
-		userID, _, ok := auth.UserFromContext(r)
+		userID, username, ok := auth.UserFromContext(r)
 		if !ok {
 			http.Error(w, "未认证", http.StatusUnauthorized)
 			return
@@ -408,6 +409,11 @@ func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.
 			return
 		}
 		history := session.Messages
+
+		// 记录用户请求到会话日志
+		if sessionLog != nil {
+			sessionLog.LogWithUser(sessionID, username, "user", req.Message)
+		}
 
 		// 首条消息自动设置会话标题（截断前 30 字符）
 		if len(history) == 0 {
@@ -437,33 +443,41 @@ func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.
 			},
 		)
 
-		// 按用户配置创建 JXWAF 客户端
-		wafClient := jxwaf.New(userCfg.JXWAF.APIURL, userCfg.JXWAF.WafAuth, userCfg.JXWAF.Group)
-
 		// 创建 Registry 并注册所有 function
 		reg := function.NewRegistry()
-		// 脚本生成类（仅预览不执行）
+
+		// 知识加载类（LLM 按需加载扩展知识，skill 机制）
+		reg.Register(&function.LoadContextFunc{
+			GetContent: promptBuilder.GetContent,
+			SkillNames: promptBuilder.SkillNames(),
+		})
+
+		// 脚本生成类（输出 backup 格式数组，用户复制后通过加载接口导入）
 		reg.Register(&function.GenerateWebRuleScriptFunc{})
 		reg.Register(&function.GenerateFlowRuleScriptFunc{})
 		reg.Register(&function.GenerateComponentScriptFunc{})
 		reg.Register(&function.GenerateNameListScriptFunc{})
-		// 执行类（直接调用 JXWAF API）
-		reg.Register(&function.CreateWebRuleFunc{Client: wafClient})
-		reg.Register(&function.CreateFlowRuleFunc{Client: wafClient})
-		reg.Register(&function.CreateComponentFunc{Client: wafClient})
-		reg.Register(&function.CreateNameListFunc{Client: wafClient})
-		reg.Register(&function.AddNameListItemFunc{Client: wafClient})
-		reg.Register(&function.CreateWebWhiteRuleFunc{Client: wafClient})
-		reg.Register(&function.CreateFlowWhiteRuleFunc{Client: wafClient})
-		reg.Register(&function.ListWebRulesFunc{Client: wafClient})
-		reg.Register(&function.ListFlowRulesFunc{Client: wafClient})
-		reg.Register(&function.VerifyFunc{VerifyURL: userCfg.VerifyURL})
+
+		// 云端验证类（如果用户配置了 cloud_env）
+		if userCfg.CloudEnv.Enabled && userCfg.CloudEnv.APIURL != "" {
+			cloudClient := jxwaf.New(userCfg.CloudEnv.APIURL, userCfg.CloudEnv.WafAuth, "")
+			reg.Register(&function.DeployToCloudFunc{Client: cloudClient})
+			reg.Register(&function.VerifyInCloudFunc{Client: cloudClient, VerifyURL: userCfg.CloudEnv.VerifyURL})
+			reg.Register(&function.CleanupCloudFunc{Client: cloudClient, AutoCleanup: userCfg.CloudEnv.AutoCleanup})
+			reg.Register(&function.ListCloudRulesFunc{Client: cloudClient})
+			reg.Register(&function.ListWebRulesFunc{Client: cloudClient})
+			reg.Register(&function.ListFlowRulesFunc{Client: cloudClient})
+			reg.Register(&function.ListComponentsFunc{Client: cloudClient})
+		}
 
 		// 创建临时 Agent
 		ag := &agent.Agent{
-			LLM:      llmClient,
-			Registry: reg,
-			Prompts:  promptBuilder,
+			LLM:           llmClient,
+			Registry:      reg,
+			Prompts:       promptBuilder,
+			AuditLog:      auditLog,
+			SessionLog:    sessionLog,
+			MaxIterations: userCfg.Agent.MaxIterations,
 		}
 
 		// SSE 响应头
@@ -488,7 +502,7 @@ func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			runMessages = ag.Run(ctx, sessionID, req.Message, history, out)
+			runMessages = ag.Run(ctx, sessionID, username, req.Message, history, out)
 		}()
 
 		// 转发事件为 SSE

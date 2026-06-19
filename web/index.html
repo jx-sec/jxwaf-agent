@@ -1184,16 +1184,12 @@
                                                 </div>
                                                 <pre><code class="hljs" v-html="highlightCode(seg.config.config_json, 'json')"></code></pre>
                                             </div>
-                                            <div v-if="seg.config.base64_cmd" class="config-section">
-                                                <div class="config-label-row">
-                                                    <span class="config-label-text">Base64 编码命令</span>
-                                                    <button class="copy-btn" :class="{copied: seg.config.copiedField==='b64'}" @click="copyText(seg.config.base64_cmd, seg.config, 'b64')">{{ seg.config.copiedField === 'b64' ? '已复制' : '复制' }}</button>
-                                                </div>
-                                                <pre><code class="hljs">{{ seg.config.base64_cmd }}</code></pre>
+                                            <div v-if="seg.config.load_hint" class="config-section" style="border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 12px; color: var(--text-secondary); font-size: 13px;">
+                                                💡 {{ seg.config.load_hint }}
                                             </div>
                                             <div class="config-actions-row">
-                                                <button class="apply-btn" :disabled="msg.applying" @click="applyConfig(msg, seg.config)">
-                                                    {{ msg.applying ? '应用中...' : '应用到 WAF' }}
+                                                <button class="apply-btn" :class="{copied: seg.config.copiedField==='config'}" @click="copyConfig(seg.config)">
+                                                    {{ seg.config.copiedField === 'config' ? '已复制' : '复制配置' }}
                                                 </button>
                                             </div>
                                         </div>
@@ -1265,7 +1261,7 @@
                     <div class="config-container">
                         <div class="config-form">
                             <div v-if="!configForm.llm.api_key" class="config-empty-tip">
-                                <strong>首次使用提示：</strong>请填写下方 LLM 和 JXWAF 配置后保存，才能开始使用聊天功能。
+                                <strong>首次使用提示：</strong>请填写下方 LLM 配置后保存，才能开始使用聊天功能。
                             </div>
                             <!-- LLM Config -->
                             <div class="config-form-section">
@@ -1305,30 +1301,48 @@
                                 </div>
                             </div>
 
-                            <!-- JXWAF Config -->
+                            <!-- Cloud Env -->
                             <div class="config-form-section">
-                                <h3>JXWAF 配置</h3>
+                                <h3>云端验证环境</h3>
                                 <div class="form-group">
-                                    <label class="form-label">API URL</label>
-                                    <input type="text" class="form-input" v-model="configForm.jxwaf.api_url" placeholder="https://user.jxwaf.com">
+                                    <label class="form-label">启用</label>
+                                    <select class="form-select" v-model="configForm.cloud_env.enabled">
+                                        <option :value="false">关闭</option>
+                                        <option :value="true">启用</option>
+                                    </select>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Waf Auth Token</label>
-                                    <input type="password" class="form-input" v-model="configForm.jxwaf.waf_auth" placeholder="WAF 认证 Token">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Group</label>
-                                    <input type="text" class="form-input" v-model="configForm.jxwaf.group" placeholder="default">
+                                <div v-if="configForm.cloud_env.enabled">
+                                    <div class="form-group">
+                                        <label class="form-label">API URL</label>
+                                        <input type="text" class="form-input" v-model="configForm.cloud_env.api_url" placeholder="https://cloud.jxwaf.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">WAF Auth Token</label>
+                                        <input type="password" class="form-input" v-model="configForm.cloud_env.waf_auth" placeholder="云端认证 Token">
+                                    </div>
+                                    <div class="form-row">
+                                         <div class="form-group">
+                                             <label class="form-label">Verify URL</label>
+                                             <input type="text" class="form-input" v-model="configForm.cloud_env.verify_url" placeholder="https://test-app.jxwaf.com">
+                                         </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">自动清理</label>
+                                        <select class="form-select" v-model="configForm.cloud_env.auto_cleanup">
+                                            <option :value="true">是（验证通过后自动删除）</option>
+                                            <option :value="false">否</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Verify URL -->
+                            <!-- Agent -->
                             <div class="config-form-section">
-                                <h3>验证 URL</h3>
+                                <h3>Agent 参数</h3>
                                 <div class="form-group">
-                                    <label class="form-label">Verify URL</label>
-                                    <input type="text" class="form-input" v-model="configForm.verify_url" placeholder="https://demo.jxwaf.com">
-                                    <div class="form-hint">用于 verify.py 测试的 WAF 目标地址</div>
+                                    <label class="form-label">最大循环轮次</label>
+                                    <input type="number" class="form-input" v-model.number="configForm.agent.max_iterations" placeholder="30">
+                                    <div class="form-hint">Agent 调用 LLM 的最大轮次，云端验证建议 ≥30</div>
                                 </div>
                             </div>
 
@@ -1385,8 +1399,8 @@
                         max_tokens: 65536, temperature: 1.0,
                         do_sample: false
                     },
-                    jxwaf: { api_url: '', waf_auth: '', group: 'default' },
-                    verify_url: ''
+                    cloud_env: { enabled: false, api_url: '', waf_auth: '', verify_url: '', auto_cleanup: true },
+                    agent: { max_iterations: 30 }
                 });
                 const configSaving = ref(false);
                 const configMessage = ref('');
@@ -1407,7 +1421,8 @@
 
                 const TYPE_LABELS = {
                     web_rule: 'Web防护规则', flow_rule: '流量防护规则',
-                    component: '防护组件', name_list: '名单防护'
+                    component: '防护组件', name_list: '名单防护',
+                    web_white: 'Web白名单', flow_white: '流量白名单'
                 };
 
                 // === 计算属性 ===
@@ -1529,7 +1544,8 @@
                 function getAction(cfg) {
                     try {
                         const conf = JSON.parse(cfg.config_json);
-                        return conf.rule_action || conf.name_list_action || (cfg.script_type === 'component' ? 'lua' : '');
+                        const item = Array.isArray(conf) ? conf[0] : conf;
+                        return item?.rule_action || item?.name_list_action || (cfg.script_type === 'component' ? 'lua' : '');
                     } catch (e) { return ''; }
                 }
 
@@ -1541,12 +1557,8 @@
                     } catch (e) {}
                 }
 
-                async function applyConfig(msg, cfg) {
-                    msg.applying = true;
-                    inputText.value = '应用上述 ' + typeLabel(cfg.script_type) + ' 配置：' + cfg.name;
-                    nextTick(() => autoResize());
-                    await send();
-                    msg.applying = false;
+                async function copyConfig(cfg) {
+                    await copyText(cfg.config_json, cfg, 'config');
                 }
 
                 // === API 封装 ===
@@ -2026,12 +2038,16 @@
                                 configForm.llm.temperature = cfg.llm.temperature !== undefined ? cfg.llm.temperature : 1.0;
                                 configForm.llm.do_sample = cfg.llm.do_sample || false;
                             }
-                            if (cfg.jxwaf) {
-                                configForm.jxwaf.api_url = cfg.jxwaf.api_url || '';
-                                configForm.jxwaf.waf_auth = cfg.jxwaf.waf_auth || '';
-                                configForm.jxwaf.group = cfg.jxwaf.group || 'default';
+                            if (cfg.cloud_env) {
+                                configForm.cloud_env.enabled = cfg.cloud_env.enabled || false;
+                                configForm.cloud_env.api_url = cfg.cloud_env.api_url || '';
+                                configForm.cloud_env.waf_auth = cfg.cloud_env.waf_auth || '';
+                                configForm.cloud_env.verify_url = cfg.cloud_env.verify_url || '';
+                                configForm.cloud_env.auto_cleanup = cfg.cloud_env.auto_cleanup !== false;
                             }
-                            configForm.verify_url = cfg.verify_url || '';
+                            if (cfg.agent) {
+                                configForm.agent.max_iterations = cfg.agent.max_iterations || 30;
+                            }
                         }
                     } catch (e) {}
                 }
@@ -2121,7 +2137,7 @@
                     // 聊天
                     messages, inputText, isStreaming, chatContainer, inputRef,
                     send, stopStreaming, handleKey, autoResize, fillTemplate, forceScrollToBottom,
-                    renderMarkdown, highlightCode, typeLabel, getAction, copyText, applyConfig,
+                    renderMarkdown, highlightCode, typeLabel, getAction, copyText, copyConfig,
                     // 配置
                     configForm, configSaving, configMessage, configMessageType,
                     thinkingEnabled, loadConfig, saveConfig,

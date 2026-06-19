@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"jxwaf-agent-go/internal/audit"
 	"jxwaf-agent-go/internal/function"
 )
 
@@ -38,9 +39,12 @@ type LLMClient interface {
 
 // Agent 主循环
 type Agent struct {
-	LLM      LLMClient
-	Registry *function.Registry
-	Prompts  *PromptBuilder
+	LLM           LLMClient
+	Registry      *function.Registry
+	Prompts       *PromptBuilder
+	AuditLog      *audit.Logger
+	SessionLog    *audit.SessionLogger
+	MaxIterations int
 }
 
 // Event 输出事件（SSE 推送给前端）
@@ -50,7 +54,7 @@ type Event struct {
 }
 
 // Run 执行 Agent 循环，返回完整 messages（含 tool_calls，供会话历史保存）
-func (a *Agent) Run(ctx context.Context, sessionID, userQuery string, history []map[string]any, out chan<- Event) []map[string]any {
+func (a *Agent) Run(ctx context.Context, sessionID, username, userQuery string, history []map[string]any, out chan<- Event) []map[string]any {
 	defer close(out)
 
 	// 1. 动态构建系统提示词
@@ -70,7 +74,11 @@ func (a *Agent) Run(ctx context.Context, sessionID, userQuery string, history []
 	})
 
 	// 3. Agent 循环
-	for iteration := 0; iteration < 10; iteration++ {
+	maxIter := a.MaxIterations
+	if maxIter <= 0 {
+		maxIter = 10
+	}
+	for iteration := 0; iteration < maxIter; iteration++ {
 		stream, err := a.LLM.ChatStream(ctx, messages, tools)
 		if err != nil {
 			out <- Event{Type: "error", Data: fmt.Sprintf("LLM 调用失败: %v", err)}
@@ -167,6 +175,16 @@ func (a *Agent) Run(ctx context.Context, sessionID, userQuery string, history []
 			if err != nil {
 				result = fmt.Sprintf("ERROR: %v", err)
 			}
+
+			// 审计日志：记录 function 调用
+			if a.AuditLog != nil {
+				a.AuditLog.Log(sessionID, username, call.Function.Name, call.Function.Arguments, result, err == nil)
+			}
+			// 会话日志：记录 tool 调用事件
+			if a.SessionLog != nil {
+				a.SessionLog.LogWithUser(sessionID, username, "tool_call", fmt.Sprintf("function=%s result=%s", call.Function.Name, truncate(result, 500)))
+			}
+
 			// generate_*_script function 返回结构化配置 JSON，推送为 config_preview 事件
 			if strings.HasPrefix(call.Function.Name, "generate_") {
 				out <- Event{Type: "config_preview", Data: result}
@@ -392,4 +410,12 @@ func bytesIndex(b []byte, c byte) int {
 		}
 	}
 	return -1
+}
+
+// truncate 截断字符串到指定长度
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

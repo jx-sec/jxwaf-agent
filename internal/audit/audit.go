@@ -15,6 +15,7 @@ import (
 type Entry struct {
 	Time      time.Time `json:"time"`
 	SessionID string    `json:"session_id"`
+	User      string    `json:"user"`
 	Function  string    `json:"function"`
 	Arguments string    `json:"arguments"`
 	Result    string    `json:"result"`
@@ -41,10 +42,11 @@ func NewLogger(logDir string) (*Logger, error) {
 }
 
 // Log 记录一条审计日志
-func (l *Logger) Log(sessionID, function, arguments, result string, success bool) {
+func (l *Logger) Log(sessionID, username, function, arguments, result string, success bool) {
 	entry := Entry{
 		Time:      time.Now(),
 		SessionID: sessionID,
+		User:      username,
 		Function:  function,
 		Arguments: arguments,
 		Result:    result,

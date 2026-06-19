@@ -11,6 +11,7 @@ import (
 
 	"jxwaf-agent-go/internal/agent"
 	"jxwaf-agent-go/internal/api"
+	"jxwaf-agent-go/internal/audit"
 	"jxwaf-agent-go/internal/auth"
 	"jxwaf-agent-go/internal/config"
 	"jxwaf-agent-go/internal/db"
@@ -67,10 +68,23 @@ func main() {
 	}
 	log.Printf("已加载提示词素材: %v", promptBuilder.ListFiles())
 
-	// 4. 会话管理器
+	// 4. 审计日志
+	auditLog, err := audit.NewLogger("logs")
+	if err != nil {
+		log.Fatalf("创建审计日志失败: %v", err)
+	}
+	defer auditLog.Close()
+	sessionLog, err := audit.NewSessionLogger("logs")
+	if err != nil {
+		log.Fatalf("创建会话日志失败: %v", err)
+	}
+	defer sessionLog.Close()
+	log.Printf("审计日志: logs/audit.log，会话日志: logs/sessions/")
+
+	// 5. 会话管理器
 	sm := agent.NewSessionManager(database)
 
-	// 5. HTTP server
+	// 6. HTTP server
 	if cfg.AllowRegister {
 		log.Printf("用户注册: 已开放")
 	} else {
@@ -93,7 +107,7 @@ func main() {
 	mux.Handle("/api/sessions", auth.Middleware(database, api.SessionsHandler(sm)))
 	mux.Handle("/api/sessions/", auth.Middleware(database, api.DeleteSessionHandler(sm)))
 	mux.Handle("/api/clear-session", auth.Middleware(database, api.ClearSessionHandler(sm)))
-	mux.Handle("/api/chat", auth.Middleware(database, api.ChatHandler(database, promptBuilder, sm)))
+	mux.Handle("/api/chat", auth.Middleware(database, api.ChatHandler(database, promptBuilder, sm, auditLog, sessionLog)))
 	mux.Handle("/api/reload-prompts", auth.Middleware(database, api.ReloadPromptsHandler(promptBuilder)))
 
 	// 静态文件
