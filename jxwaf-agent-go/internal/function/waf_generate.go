@@ -4,21 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"jxwaf-agent-go/internal/jxwaf"
 )
 
 // scriptResult 脚本生成结果（推送给前端作为 config_preview 事件数据）
 type scriptResult struct {
-	ScriptType string `json:"script_type"` // web_rule | flow_rule | component | name_list
-	Name       string `json:"name"`
-	Detail     string `json:"detail"`
-	ConfigJSON string `json:"config_json"` // 完整配置 JSON
-	CLICommand string `json:"cli_command"` // waf_cli.py 命令
-	CodeLua    string `json:"code_lua,omitempty"`
-	ConfJSON   string `json:"conf_json,omitempty"`
-	Base64Cmd  string `json:"base64_cmd,omitempty"`
+	ScriptType  string `json:"script_type"` // web_rule | flow_rule | component | name_list
+	Name        string `json:"name"`
+	Detail      string `json:"detail"`
+	ConfigJSON  string `json:"config_json"` // 完整配置 JSON
+	CodeLua     string `json:"code_lua,omitempty"`
+	ConfJSON    string `json:"conf_json,omitempty"`
+	Base64Cmd   string `json:"base64_cmd,omitempty"`
 	Explanation string `json:"explanation"`
 }
 
@@ -101,16 +99,11 @@ func (f *GenerateWebRuleScriptFunc) Execute(ctx context.Context, args map[string
 		"action_value": actionValue,
 	}, "", "  ")
 
-	matchsJSON, _ := json.Marshal(matchs)
-	cli := fmt.Sprintf("python tools/waf_cli.py web-rule create \\\n  --group default \\\n  --name %s \\\n  --detail \"%s\" \\\n  --matchs '%s' \\\n  --action %s",
-		name, detail, string(matchsJSON), action)
-
 	result := scriptResult{
 		ScriptType:  "web_rule",
 		Name:        name,
 		Detail:      detail,
 		ConfigJSON:  string(configJSON),
-		CLICommand:  cli,
 		Explanation: fmt.Sprintf("Web 防护规则 %s（action=%s）。匹配条件 %d 组。", name, action, len(matchs)),
 	}
 	return toJSON(result), nil
@@ -192,18 +185,11 @@ func (f *GenerateFlowRuleScriptFunc) Execute(ctx context.Context, args map[strin
 		"block_time":   int(blockTime),
 	}, "", "  ")
 
-	matchsJSON, _ := json.Marshal(matchs)
-	entityJSON, _ := json.Marshal(entity)
-	cli := fmt.Sprintf("python tools/waf_cli.py flow-rule create \\\n  --group default \\\n  --name %s \\\n  --detail \"%s\" \\\n  --action %s --action-value %s \\\n  --filter %s \\\n  --matchs '%s' \\\n  --entity '%s' \\\n  --stat-time %d --exceed-count %d --block-time %d",
-		name, detail, action, actionValue, filter,
-		string(matchsJSON), string(entityJSON), int(statTime), int(exceedCount), int(blockTime))
-
 	result := scriptResult{
 		ScriptType:  "flow_rule",
 		Name:        name,
 		Detail:      detail,
 		ConfigJSON:  string(configJSON),
-		CLICommand:  cli,
 		Explanation: fmt.Sprintf("流量防护规则 %s（%ds 内超过 %d 次 → %s %s）。",
 			name, int(statTime), int(exceedCount), action, actionValue),
 	}
@@ -246,9 +232,6 @@ func (f *GenerateComponentScriptFunc) Execute(ctx context.Context, args map[stri
 	base64Cmd := fmt.Sprintf("python3 -c \"import base64; print(base64.b64encode(open('generated/<project>/components/%s/code.lua','rb').read()).decode('ascii'))\" > generated/<project>/components/%s/code.base64",
 		name, name)
 
-	cli := fmt.Sprintf("python tools/waf_cli.py component create \\\n  --name %s \\\n  --detail \"%s\" \\\n  --code-file generated/<project>/components/%s/code.lua \\\n  --conf '%s'",
-		name, detail, name, conf)
-
 	result := scriptResult{
 		ScriptType:  "component",
 		Name:        name,
@@ -257,7 +240,6 @@ func (f *GenerateComponentScriptFunc) Execute(ctx context.Context, args map[stri
 		CodeLua:     codeLua,
 		ConfJSON:    conf,
 		Base64Cmd:   base64Cmd,
-		CLICommand:  cli,
 		Explanation: fmt.Sprintf("防护组件 %s。Lua 代码 %d 字节，请确认兼容 LuaJIT（Lua 5.1）。", name, len(codeLua)),
 	}
 	return toJSON(result), nil
@@ -349,19 +331,6 @@ func (f *GenerateNameListScriptFunc) Execute(ctx context.Context, args map[strin
 		"items":                 items,
 	}, "", "  ")
 
-	ruleJSON, _ := json.Marshal(rule)
-	cli := fmt.Sprintf("python tools/waf_cli.py name-list create \\\n  --name %s \\\n  --detail \"%s\" \\\n  --rule '%s' \\\n  --action %s",
-		name, detail, string(ruleJSON), action)
-
-	// 若有条目，追加添加条目命令
-	if len(items) > 0 {
-		cli += "\n\n# 批量添加条目\n"
-		for _, it := range items {
-			cli += fmt.Sprintf("python tools/waf_cli.py name-list add-item --name %s --item \"%s\"\n", name, it)
-		}
-		cli = strings.TrimRight(cli, "\n")
-	}
-
 	expireHint := ""
 	if expire == "true" {
 		expireHint = fmt.Sprintf("临时名单，过期时间 %s 秒。", expireTime)
@@ -374,7 +343,6 @@ func (f *GenerateNameListScriptFunc) Execute(ctx context.Context, args map[strin
 		Name:        name,
 		Detail:      detail,
 		ConfigJSON:  string(configJSON),
-		CLICommand:  cli,
 		Explanation: fmt.Sprintf("名单防护 %s（action=%s）。%s 条目 %d 个。", name, action, expireHint, len(items)),
 	}
 	return toJSON(result), nil

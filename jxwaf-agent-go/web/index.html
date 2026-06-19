@@ -1191,13 +1191,6 @@
                                                 </div>
                                                 <pre><code class="hljs">{{ seg.config.base64_cmd }}</code></pre>
                                             </div>
-                                            <div v-if="seg.config.cli_command" class="config-section">
-                                                <div class="config-label-row">
-                                                    <span class="config-label-text">CLI 命令</span>
-                                                    <button class="copy-btn" :class="{copied: seg.config.copiedField==='cli'}" @click="copyText(seg.config.cli_command, seg.config, 'cli')">{{ seg.config.copiedField === 'cli' ? '已复制' : '复制' }}</button>
-                                                </div>
-                                                <pre><code class="hljs" v-html="highlightCode(seg.config.cli_command, 'bash')"></code></pre>
-                                            </div>
                                             <div class="config-actions-row">
                                                 <button class="apply-btn" :disabled="msg.applying" @click="applyConfig(msg, seg.config)">
                                                     {{ msg.applying ? '应用中...' : '应用到 WAF' }}
@@ -1852,7 +1845,7 @@
                                     // 检查是否为 config_preview（generate_* 函数返回的 JSON）
                                     try {
                                         const cfg = JSON.parse(raw.content);
-                                        if (cfg.config_json || cfg.cli_command) {
+                                        if (cfg.config_json) {
                                             cfg.copiedField = '';
                                             currentAssistant.segments.push({ type: 'config', config: cfg });
                                         }
