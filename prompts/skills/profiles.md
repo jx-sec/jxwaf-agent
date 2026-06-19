@@ -64,7 +64,7 @@ conf 配置：
 ```
 
 ### 共享字典使用要点
-- 使用 `ngx.shared.jxwaf_inner`，key 前缀拼项目名（如 `cc_detect_count_`）
+- 使用 `ngx.shared.jxwaf_user`（组件专用，禁止用 jxwaf_inner），key 前缀拼项目名（如 `cc_detect_count_`）
 - 统计 key：`cc_detect_count_ .. src_ip .. "_" .. path`
 - 封禁 key：`cc_detect_block_ .. path`
 - 必须 set TTL，避免内存无限增长

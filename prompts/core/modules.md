@@ -68,6 +68,33 @@
 | ip_in_cidr | IP 在网段（单个 CIDR，仅 IPv4） |
 | ip_in_cidrs | IP 在多网段（逗号分隔 CIDR，仅 IPv4） |
 
+## 正则编写规范（rx 运算符）
+WAF 规则每次请求都执行正则匹配，正则质量直接影响性能与稳定性。编写 match_value 正则时必须遵守：
+
+### 优先级：字符串运算符 > 正则
+能用 str_contain/str_prefix/str_eq/str_suffix 解决的，**不要用 rx**。正则比字符串操作慢 10-100 倍。
+
+### 防止灾难性回溯（ReDoS）
+1. **禁止嵌套量词**：`(a+)+`、`(a*)*`、`(a|b)*` 这类嵌套量词会导致指数级回溯，攻击者可构造恶意输入打满 CPU
+2. **避免 .* 滥用**：`.*foo` 会从每个位置尝试匹配。优先用具体字符类限定边界：`[^&]*foo`（参数内）、`[^\s]*foo`（单行内）
+3. **非贪婪优先**：必须用通配时，`.*?` 优于 `.*`（减少回溯），但更优的是用具体字符类如 `[^"]*`、`[^&]*`
+4. **锚定范围**：用 `^` 锚定开头、`\b` 锚定单词边界，减少匹配尝试位置
+
+### 字符类优于通配符
+| 避免 | 推荐 | 原因 |
+|------|------|------|
+| `.*` | `[^&]*` / `[^\s]*` | 限定边界，减少回溯 |
+| `.+` | `[a-zA-Z0-9]+` | 明确字符集 |
+| `(a\|b)*` | `[ab]*` | 字符类比交替快 |
+
+### 示例
+```
+✅ ^/admin/[a-z]+$
+❌ .*admin.*              （贪婪 + 双 .*，高回溯风险）
+✅ union[\s/\*]+select    （字符类 + 限定分隔符）
+❌ union.*select          （.* 跨参数匹配，误报 + 慢）
+```
+
 ## 多条件逻辑
 - 同一规则内多个 rule_match = AND（全部命中才触发）
 - 单个 rule_match 内多个 match_args = OR（任一命中即可）
@@ -111,7 +138,7 @@
   - require "resty.jxwaf.request"：获取请求参数（get_args）
   - require "resty.jxwaf.unify_action"：执行动作（block/reject_response/bot_check/network_block）
   - ngx.ctx：设置上下文变量供后续模块引用
-  - ngx.shared.jxwaf_inner：共享字典（**注意 key 前缀避免冲突**）
+  - ngx.shared.jxwaf_user：组件专用共享字典（所有组件共用，**禁止使用 jxwaf_inner**）
   - ngx.re.match / ngx.re.find / ngx.re.gsub：PCRE 正则
   - cjson.safe：JSON 处理
   - ngx.md5 / ngx.hmac_sha1 / ngx.encode_base64 / ngx.decode_base64

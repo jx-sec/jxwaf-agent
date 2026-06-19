@@ -6,9 +6,10 @@
 ## 运行环境
 - WAF 节点：OpenResty 1.29.2.3 + LuaJIT 2.1（基于 Lua 5.1，不支持 5.2+ 语法）
 - 正则引擎：PCRE（通过 ngx.re.* 调用，选项 oij）
-- 共享字典：ngx.shared.jxwaf_inner（流量统计/处罚/网络封禁）、ngx.shared.waf_conf_data（配置缓存）
+- 共享字典：ngx.shared.jxwaf_inner（WAF 内部，流量统计/处罚/网络封禁，**组件禁用**）、ngx.shared.jxwaf_user（组件专用，所有组件共用）、ngx.shared.waf_conf_data（配置缓存）
 - 组件执行：节点对 code 字段做 Base64 解码后 loadstring 编译，pcall 包裹执行 check(conf_data)
 - 配置同步：privileged agent 每 3 秒拉取，worker 每 3 秒比对 md5 更新本地缓存
+- **运行定位**：WAF 是业务流量关键基础设施，防护组件在 access 阶段对**每个请求**执行，性能和稳定性直接影响业务可用性。组件卡顿/崩溃会阻断正常流量，必须严格遵循性能与稳定性规范（见 component_dev.md）
 
 ## 版本差异
 - **专业版**：域名分组(group)维度，接口路径含 `group_` 前缀，需 group_name 参数；支持自定义请求头/响应头/响应内容/回源地址、ClickHouse 日志查询、全局备份恢复、WebTDS
