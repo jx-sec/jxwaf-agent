@@ -1,3 +1,8 @@
+---
+name: api_reference
+description: JXWAF 控制台 API 速查（鉴权方式、接口路径、必填参数、backup/load 语义、版本差异）。需要查 API 接口路径/参数或了解 API 调用方式时加载
+---
+
 # JXWAF 控制台 API 速查
 
 ## 鉴权方式

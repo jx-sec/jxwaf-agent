@@ -33,7 +33,7 @@ func NewPromptBuilder(promptsDir string) (*PromptBuilder, error) {
 	pb := &PromptBuilder{
 		dir:      promptsDir,
 		core:     make(map[string]string),
-		alwaysOn: []string{"core.md", "modules.md", "api.md"},
+		alwaysOn: []string{"core.md", "modules.md"},
 	}
 	if err := pb.loadAll(); err != nil {
 		return nil, err
