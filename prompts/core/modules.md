@@ -137,6 +137,7 @@ WAF 规则每次请求都执行正则匹配，正则质量直接影响性能与�
 - 可用 API：
   - require "resty.jxwaf.request"：获取请求参数（get_args）
   - require "resty.jxwaf.unify_action"：执行动作（block/reject_response/bot_check/network_block）
+  - require "resty.jxwaf.iputils"：IP/CIDR 处理（ip_in_cidr / ip_in_cidrs）
   - ngx.ctx：设置上下文变量供后续模块引用
   - ngx.shared.jxwaf_user：组件专用共享字典（所有组件共用，**禁止使用 jxwaf_inner**）
   - ngx.re.match / ngx.re.find / ngx.re.gsub：PCRE 正则

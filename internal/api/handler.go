@@ -470,6 +470,14 @@ func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.
 			reg.Register(&function.ListComponentsFunc{Client: cloudClient})
 		}
 
+		// 自动部署类（SSH 远程部署 JXWAF 到目标服务器）
+		deploymentExecutor := function.NewDeploymentExecutor()
+		reg.Register(&function.CheckServerEnvironmentFunc{})
+		reg.Register(&function.PlanJxwafDeploymentFunc{})
+		reg.Register(&function.ExecuteSSHCommandFunc{Executor: deploymentExecutor})
+		reg.Register(&function.VerifyDeploymentFunc{})
+		reg.Register(&function.GetDeploymentSummaryFunc{Executor: deploymentExecutor})
+
 		// 创建临时 Agent
 		ag := &agent.Agent{
 			LLM:           llmClient,

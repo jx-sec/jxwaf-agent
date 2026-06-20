@@ -117,6 +117,7 @@ end
 ### JXWAF 专用模块
 - `require "resty.jxwaf.request"`：请求参数获取（get_args(key, value)）
 - `require "resty.jxwaf.unify_action"`：统一动作执行
+- `require "resty.jxwaf.iputils"`：IP/CIDR 处理（ip_in_cidr / ip_in_cidrs，**禁止自行实现 IP 解析或 CIDR 匹配**）
 
 ### OpenResty 标准 API
 - `ngx.req.get_headers(limit)` / `ngx.req.get_uri_args(limit)` / `ngx.req.get_post_args(limit)`
@@ -178,7 +179,7 @@ ngx.ctx.waf_log = {
 1. 简洁优先：每个组件独立运行，一个组件只解决一个问题
 2. 内联实现：辅助函数直接写在组件文件内，不抽取公共库
 3. 扁平结构：头部注释 → 顶层 require → 辅助函数 → check 函数 → return _M
-4. 最小依赖：只 require 必要模块，不引入第三方库
+4. 最小依赖：只 require 必要模块，不引入第三方库。**WAF 内置库（resty.jxwaf.*）优先使用，禁止重新造轮子实现已有功能**（如 IP 解析、CIDR 匹配等已有内置库覆盖的能力）
 5. 直白逻辑：优先 if/else 和 for 循环，不用元表、闭包工厂、高阶函数
 6. 注释克制：只在「为什么这么做」需要解释时加注释
 7. **require 置顶**：所有 require 必须放在模块顶层（`local _M = {}` 之前），**禁止放在 check 函数内**。模块顶层代码 per-worker 只执行一次；函数内 require 每次请求都调用，虽有 package.loaded 缓存但仍有函数调用开销，影响性能

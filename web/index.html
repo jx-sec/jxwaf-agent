@@ -1193,6 +1193,59 @@
                                                 </button>
                                             </div>
                                         </div>
+                                        <!-- Deployment plan card segment -->
+                                        <div v-else-if="seg.type === 'deployment_plan'" class="config-card">
+                                            <div class="config-card-header">
+                                                <span class="config-type-tag" style="background:var(--accent);color:#fff;">部署计划</span>
+                                                <span class="config-name-text">{{ seg.plan.version === 'standard' ? '标准版' : '专业版' }} → {{ seg.plan.server_ip }}</span>
+                                                <span v-if="seg.plan.components && seg.plan.components.length" class="config-action-tag">{{ seg.plan.components.join(', ') }}</span>
+                                            </div>
+                                            <div v-if="seg.plan.summary" class="config-detail-text">{{ seg.plan.summary }}</div>
+                                            <div class="config-section">
+                                                <div class="config-label-text" style="margin-bottom:8px;">部署步骤（{{ seg.plan.steps.length }} 步）</div>
+                                                <div v-for="(step, si) in seg.plan.steps" :key="si" style="margin-bottom:10px;padding:8px 12px;border-radius:6px;background:var(--bg-input);border-left:3px solid;" :style="{borderLeftColor: step.is_risky ? '#e74c3c' : 'var(--accent)'}">
+                                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                                        <span style="font-weight:600;color:var(--text-primary);">步骤 {{ step.step_id }}</span>
+                                                        <span v-if="step.is_risky" style="font-size:11px;padding:2px 6px;border-radius:3px;background:#e74c3c;color:#fff;">风险</span>
+                                                        <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:var(--border);color:var(--text-secondary);">{{ step.category === 'standard' ? '文档标准' : '超出文档' }}</span>
+                                                        <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:var(--border);color:var(--text-secondary);">{{ step.component }}</span>
+                                                    </div>
+                                                    <div style="margin-top:4px;color:var(--text-secondary);font-size:13px;">{{ step.description }}</div>
+                                                    <pre style="margin-top:6px;font-size:12px;background:var(--bg-code);padding:8px;border-radius:4px;overflow-x:auto;color:#e4e6eb;"><code v-for="(cmd, ci) in step.commands" :key="ci" style="display:block;">{{ cmd }}</code></pre>
+                                                    <div v-if="step.risk_reason" style="margin-top:4px;color:#e74c3c;font-size:12px;">⚠ {{ step.risk_reason }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Deployment summary card segment -->
+                                        <div v-else-if="seg.type === 'deployment_summary'" class="config-card">
+                                            <div class="config-card-header">
+                                                <span class="config-type-tag" style="background:var(--accent);color:#fff;">执行摘要</span>
+                                                <span class="config-name-text">{{ seg.summary.total_commands }} 条命令 · {{ seg.summary.success_count }} 成功 · {{ seg.summary.fail_count }} 失败</span>
+                                                <span v-if="seg.summary.overall_status === 'all_success'" class="config-action-tag" style="background:#27ae60;color:#fff;">全部成功</span>
+                                                <span v-else-if="seg.summary.overall_status === 'has_failures'" class="config-action-tag" style="background:#e74c3c;color:#fff;">存在失败</span>
+                                            </div>
+                                            <div v-if="seg.summary.message" class="config-detail-text">{{ seg.summary.message }}</div>
+                                            <div class="config-section">
+                                                <div class="config-label-text" style="margin-bottom:8px;">已执行命令详情</div>
+                                                <div v-for="(cmd, ci) in seg.summary.commands" :key="ci" style="margin-bottom:10px;padding:8px 12px;border-radius:6px;background:var(--bg-input);border-left:3px solid;" :style="{borderLeftColor: cmd.success ? '#27ae60' : '#e74c3c'}">
+                                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                                        <span style="font-weight:600;color:var(--text-primary);">{{ cmd.step }}</span>
+                                                        <span v-if="cmd.is_risky" style="font-size:11px;padding:2px 6px;border-radius:3px;background:#e74c3c;color:#fff;">风险</span>
+                                                        <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:var(--border);color:var(--text-secondary);">退出码 {{ cmd.exit_code }}</span>
+                                                        <span style="font-size:11px;padding:2px 6px;border-radius:3px;background:var(--border);color:var(--text-secondary);">{{ cmd.duration }}</span>
+                                                    </div>
+                                                    <pre style="margin-top:6px;font-size:12px;background:var(--bg-code);padding:8px;border-radius:4px;overflow-x:auto;color:#9ca3af;"><code>{{ cmd.command }}</code></pre>
+                                                    <div v-if="cmd.stdout" style="margin-top:6px;">
+                                                        <span style="font-size:11px;color:var(--text-secondary);">stdout:</span>
+                                                        <pre style="font-size:12px;background:var(--bg-code);padding:6px 8px;border-radius:4px;overflow-x:auto;max-height:200px;white-space:pre-wrap;color:#e4e6eb;"><code>{{ cmd.stdout }}</code></pre>
+                                                    </div>
+                                                    <div v-if="cmd.stderr" style="margin-top:6px;">
+                                                        <span style="font-size:11px;color:#e74c3c;">stderr:</span>
+                                                        <pre style="font-size:12px;background:var(--bg-code);padding:6px 8px;border-radius:4px;overflow-x:auto;max-height:200px;white-space:pre-wrap;color:#e74c3c;"><code>{{ cmd.stderr }}</code></pre>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </template>
                                     <!-- Thinking indicator (无内容时显示) -->
                                     <div v-if="msg.thinking && !msg.segments.length" class="msg-bubble">
@@ -1981,6 +2034,22 @@
                                             const cfg = JSON.parse(evt.data);
                                             cfg.copiedField = '';
                                             assistantMsg.segments.push({ type: 'config', config: cfg });
+                                        } catch (e) {}
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'deployment_plan') {
+                                        const lastTool = [...assistantMsg.segments].reverse().find(s => s.type === 'tool' && s.status === 'running');
+                                        if (lastTool) lastTool.status = 'done';
+                                        try {
+                                            const plan = JSON.parse(evt.data);
+                                            assistantMsg.segments.push({ type: 'deployment_plan', plan: plan });
+                                        } catch (e) {}
+                                        scrollIfCurrent();
+                                    } else if (evt.type === 'deployment_summary') {
+                                        const lastTool = [...assistantMsg.segments].reverse().find(s => s.type === 'tool' && s.status === 'running');
+                                        if (lastTool) lastTool.status = 'done';
+                                        try {
+                                            const summary = JSON.parse(evt.data);
+                                            assistantMsg.segments.push({ type: 'deployment_summary', summary: summary });
                                         } catch (e) {}
                                         scrollIfCurrent();
                                     } else if (evt.type === 'error') {

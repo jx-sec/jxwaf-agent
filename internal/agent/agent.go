@@ -188,6 +188,12 @@ func (a *Agent) Run(ctx context.Context, sessionID, username, userQuery string, 
 			// generate_*_script function 返回结构化配置 JSON，推送为 config_preview 事件
 			if strings.HasPrefix(call.Function.Name, "generate_") {
 				out <- Event{Type: "config_preview", Data: result}
+			} else if call.Function.Name == "plan_jxwaf_deployment" {
+				// 部署计划推送为 deployment_plan 事件，前端渲染为可确认的部署计划卡片
+				out <- Event{Type: "deployment_plan", Data: result}
+			} else if call.Function.Name == "get_deployment_summary" {
+				// 部署执行摘要推送为 deployment_summary 事件
+				out <- Event{Type: "deployment_summary", Data: result}
 			} else {
 				out <- Event{Type: "tool_end", Data: result}
 			}
