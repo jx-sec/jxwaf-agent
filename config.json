@@ -25,6 +25,25 @@
       "verify_url": "",
       "auto_cleanup": true
     },
+    "waf_providers": {
+      "aliyun": {
+        "enabled": false,
+        "access_key_id": "",
+        "access_key_secret": "",
+        "region": "cn-hangzhou",
+        "endpoint": "wafopenapi.cn-hangzhou.aliyuncs.com",
+        "instance_id": "",
+        "template_id": 0
+      },
+      "tencent": {
+        "enabled": false,
+        "secret_id": "",
+        "secret_key": "",
+        "region": "ap-guangzhou",
+        "edition": "sparta-waf",
+        "instance_id": ""
+      }
+    },
     "agent": {
       "max_iterations": 30
     }
@@ -33,6 +52,8 @@
     { "label": "拦截 /admin", "text": "帮我生成一条 Web 防护规则，拦截访问路径包含 /admin 的请求" },
     { "label": "限速 100QPS", "text": "帮我生成一条流量防护规则，限制单 IP 60 秒内最多 100 次请求" },
     { "label": "SQL注入检测组件", "text": "帮我生成一个防护组件，检测请求头 User-Agent 是否包含 SQL 注入特征" },
-    { "label": "IP 黑名单", "text": "帮我生成一个 IP 黑名单，action 为 block" }
+    { "label": "IP 黑名单", "text": "帮我生成一个 IP 黑名单，action 为 block" },
+    { "label": "阿里云WAF拦截规则", "text": "帮我在阿里云 WAF 生成一条自定义 ACL 规则，拦截访问路径包含 /admin 的请求，并通过 API 发布" },
+    { "label": "腾讯云WAF CC防护", "text": "帮我在腾讯云 WAF 生成一条 CC 防护规则，限制单 IP 60 秒内最多 100 次请求，并通过 API 发布" }
   ]
 }

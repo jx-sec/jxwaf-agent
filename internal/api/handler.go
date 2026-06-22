@@ -11,12 +11,14 @@ import (
 	"sync"
 
 	"jxwaf-agent-go/internal/agent"
+	"jxwaf-agent-go/internal/aliyunwaf"
 	"jxwaf-agent-go/internal/audit"
 	"jxwaf-agent-go/internal/auth"
 	"jxwaf-agent-go/internal/config"
 	"jxwaf-agent-go/internal/db"
 	"jxwaf-agent-go/internal/function"
 	"jxwaf-agent-go/internal/jxwaf"
+	"jxwaf-agent-go/internal/tencentwaf"
 )
 
 // ChatRequest 聊天请求
@@ -477,6 +479,49 @@ func ChatHandler(database *db.DB, promptBuilder *agent.PromptBuilder, sm *agent.
 		reg.Register(&function.ExecuteSSHCommandFunc{Executor: deploymentExecutor})
 		reg.Register(&function.VerifyDeploymentFunc{})
 		reg.Register(&function.GetDeploymentSummaryFunc{Executor: deploymentExecutor})
+
+		// 阿里云 WAF 规则生成与发布（用户配置了 waf_providers.aliyun 时启用）
+		if userCfg.WAFProviders.Aliyun.Enabled && userCfg.WAFProviders.Aliyun.AccessKeyID != "" {
+			aliyunClient := aliyunwaf.New(
+				userCfg.WAFProviders.Aliyun.AccessKeyID,
+				userCfg.WAFProviders.Aliyun.AccessKeySecret,
+				userCfg.WAFProviders.Aliyun.Region,
+				userCfg.WAFProviders.Aliyun.Endpoint,
+				userCfg.WAFProviders.Aliyun.InstanceID,
+				userCfg.WAFProviders.Aliyun.TemplateID,
+			)
+			// 规则生成类
+			reg.Register(&function.GenerateAliyunACLRuleFunc{})
+			reg.Register(&function.GenerateAliyunCCRuleFunc{})
+			reg.Register(&function.GenerateAliyunIPBlacklistFunc{})
+			// API 发布类
+			reg.Register(&function.PublishAliyunWAFRuleFunc{Client: aliyunClient})
+			// 查询/删除类
+			reg.Register(&function.ListAliyunWAFRulesFunc{Client: aliyunClient})
+			reg.Register(&function.DeleteAliyunWAFRuleFunc{Client: aliyunClient})
+			reg.Register(&function.ListAliyunWAFResourcesFunc{Client: aliyunClient})
+		}
+
+		// 腾讯云 WAF 规则生成与发布（用户配置了 waf_providers.tencent 时启用）
+		if userCfg.WAFProviders.Tencent.Enabled && userCfg.WAFProviders.Tencent.SecretID != "" {
+			tencentClient := tencentwaf.New(
+				userCfg.WAFProviders.Tencent.SecretID,
+				userCfg.WAFProviders.Tencent.SecretKey,
+				userCfg.WAFProviders.Tencent.Region,
+				userCfg.WAFProviders.Tencent.Edition,
+				userCfg.WAFProviders.Tencent.InstanceID,
+			)
+			// 规则生成类
+			reg.Register(&function.GenerateTencentCustomRuleFunc{})
+			reg.Register(&function.GenerateTencentCCRuleFunc{})
+			reg.Register(&function.GenerateTencentIPBlacklistFunc{})
+			// API 发布类
+			reg.Register(&function.PublishTencentWAFRuleFunc{Client: tencentClient})
+			// 查询/删除类
+			reg.Register(&function.ListTencentWAFRulesFunc{Client: tencentClient})
+			reg.Register(&function.DeleteTencentWAFRuleFunc{Client: tencentClient})
+			reg.Register(&function.ListTencentWAFDomainsFunc{Client: tencentClient})
+		}
 
 		// 创建临时 Agent
 		ag := &agent.Agent{

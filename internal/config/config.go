@@ -36,6 +36,33 @@ type CloudEnvConfig struct {
 	AutoCleanup bool   `json:"auto_cleanup"`
 }
 
+// AliyunWAFConfig 阿里云 WAF 配置（WAF 3.0 OpenAPI）
+type AliyunWAFConfig struct {
+	Enabled         bool   `json:"enabled"`
+	AccessKeyID     string `json:"access_key_id"`
+	AccessKeySecret string `json:"access_key_secret"`
+	Region          string `json:"region"`      // cn-hangzhou / ap-southeast-1
+	Endpoint        string `json:"endpoint"`    // wafopenapi.cn-hangzhou.aliyuncs.com
+	InstanceID      string `json:"instance_id"` // WAF 实例 ID
+	TemplateID      int64  `json:"template_id"` // 防护模板 ID
+}
+
+// TencentWAFConfig 腾讯云 WAF 配置
+type TencentWAFConfig struct {
+	Enabled    bool   `json:"enabled"`
+	SecretID   string `json:"secret_id"`
+	SecretKey  string `json:"secret_key"`
+	Region     string `json:"region"`  // ap-guangzhou / ap-seoul / ap-singapore
+	Edition    string `json:"edition"`  // sparta-waf / clb-waf
+	InstanceID string `json:"instance_id"`
+}
+
+// WAFProviders 多 WAF 提供商配置
+type WAFProviders struct {
+	Aliyun  AliyunWAFConfig  `json:"aliyun"`
+	Tencent TencentWAFConfig `json:"tencent"`
+}
+
 // AgentConfig Agent 运行参数
 type AgentConfig struct {
 	MaxIterations int `json:"max_iterations"`
@@ -43,10 +70,11 @@ type AgentConfig struct {
 
 // UserConfig 用户配置（存入 user_configs.config_json）
 type UserConfig struct {
-	LLM      LLMConfig      `json:"llm"`
-	JXWAF    JXWAFConfig    `json:"jxwaf"`
-	CloudEnv CloudEnvConfig `json:"cloud_env"`
-	Agent    AgentConfig    `json:"agent"`
+	LLM          LLMConfig      `json:"llm"`
+	JXWAF        JXWAFConfig    `json:"jxwaf"`
+	CloudEnv     CloudEnvConfig `json:"cloud_env"`
+	WAFProviders WAFProviders   `json:"waf_providers"`
+	Agent        AgentConfig    `json:"agent"`
 }
 
 // DefaultUserConfig 全局默认配置（从 config.json 的 default_config 加载，启动时注入）
