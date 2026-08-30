@@ -1,0 +1,13 @@
+# 运行时状态（部署计划、锁文件）
+.jxwaf/
+
+# CLI 产物
+jxwaf-cli
+output/
+
+# Go
+*.test
+*.out
+
+# macOS
+.DS_Store
