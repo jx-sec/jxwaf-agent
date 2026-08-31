@@ -56,6 +56,39 @@ jxwaf-cli soc log query --params '{"from_time":"...","to_time":"...","page":1,"s
 - 常用过滤：`host` equals 域名、`waf_action` equals `block/watch`、`src_ip` equals 攻击源
 - 关键字段：`waf_module`（命中模块）、`waf_policy`（命中规则名）、`waf_action`（实际动作）、`waf_extra`（细节）
 
+### waf_module 对照（定位拦截/放行来源）
+
+| waf_module | 模块 |
+|---|---|
+| `base_component` | 防护组件 |
+| `name_list` | 名单防护 |
+| `flow_white_rule` / `web_white_rule` | 流量/Web 白名单 |
+| `flow_ip_region_block` | IP 区域封禁 |
+| `flow_rule_protection` / `web_rule_protection` | 流量/Web 防护规则 |
+| `flow_engine_protection` / `web_engine_protection` | 流量/Web 引擎防护 |
+| `web_page_tamper_proof` | 网页防篡改 |
+
+### waf_action 对照
+
+| waf_action | 含义 |
+|---|---|
+| `block` | 被拦截（403） |
+| `reject_response` | 连接被关闭（444） |
+| `bot_check` | 人机识别质询 |
+| `network_block` | 网络层封禁 |
+| `watch` | 观察记录 |
+| `pass` | 放行 |
+| `web_bypass` / `flow_bypass` / `all_bypass` | 白名单/名单放行 |
+
+## 用例设计分模块要点
+
+- **Web 规则**：攻击载荷放 path/headers/body；正常用例同路径相似参数（暴露误报）；补编码变体（URL/Unicode/Hex）与大小写变体
+- **流量规则**：每条用例仅发送 1 次请求，触发限速需把攻击用例在 `test_cases` 数组中**重复多次**（重复条数 > exceed_count，或验证时临时调低阈值如 exceed_count=3 配 4 条重复用例）；正常用例低频
+- **组件**：攻击用例带触发特征；组件设 ctx 变量由规则处置时，同时验证规则引用是否生效
+- **名单**：条目内特征请求应 block，条目外应 pass；临时名单验证过期自动放行
+
+误报/漏报的排查决策树与调优见 [playbook.md](playbook.md)。
+
 ## 通过标准
 
 攻击用例全部 `blocked`（或 watch 场景 soc 有对应命中）、正常用例全部 `passed`，且无异常 → 可向用户提交验证报告（report 数据）并申请生产下发。

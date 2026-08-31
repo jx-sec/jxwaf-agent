@@ -4,6 +4,8 @@
 # CLI 产物
 jxwaf-cli
 output/
+# 项目目录 CLI 配置（含凭据，严禁提交）
+config.json
 
 # Go
 *.test

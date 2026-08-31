@@ -118,7 +118,6 @@ func newVerifyCmd() *cobra.Command {
 			return out, nil
 		}),
 	}
-	addParamsFlag(cmd)
 	cmd.Flags().StringVar(&targetURL, "url", "", "被测站点地址（如 https://www.example.com）")
 	cmd.Flags().IntVar(&waitSec, "wait", 5, "打流量后等待日志落库的秒数")
 	return cmd

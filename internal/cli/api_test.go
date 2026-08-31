@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jx-sec/jxwaf-agent/internal/adapter"
@@ -11,21 +13,24 @@ import (
 	"github.com/jx-sec/jxwaf-agent/internal/config"
 )
 
-// testServer 构造一个模拟管理 API 的 httptest 服务器，返回收到的路径与请求体。
+// testServer 构造一个模拟管理 API 的 httptest 服务器，返回收到的路径、请求体与请求头。
 func testServer(t *testing.T) (*httptest.Server, *struct {
-	Path string
-	Body map[string]any
+	Path   string
+	Body   map[string]any
+	Header http.Header
 }) {
 	t.Helper()
 	rec := &struct {
-		Path string
-		Body map[string]any
+		Path   string
+		Body   map[string]any
+		Header http.Header
 	}{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.Path = r.URL.Path
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		rec.Body = body
+		rec.Header = r.Header.Clone()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"result": true, "message": "ok", "data": map[string]any{"echo": true}})
 	}))
@@ -58,6 +63,11 @@ func TestCallOpProfessionalTenantInjection(t *testing.T) {
 	}
 	if rec.Body["page"].(float64) != 1 {
 		t.Errorf("原始参数应保留: %v", rec.Body)
+	}
+	// 认证头必须真实到达服务端（端到端验证 HeaderMap → client.Post 链路）
+	// 头名为中划线 jxwaf-waf-auth：nginx 默认丢弃下划线头，服务端经 http_jxwaf_waf_auth 变量读取
+	if rec.Header.Get("jxwaf-waf-auth") != "t" {
+		t.Errorf("认证头 jxwaf-waf-auth 未传递或取值错误: %v", rec.Header)
 	}
 }
 
@@ -99,5 +109,23 @@ func TestLoadParamsInline(t *testing.T) {
 	}
 	if _, err := loadParams("not-json"); err == nil {
 		t.Error("非法 JSON 应报错")
+	}
+}
+
+func TestLoadParamsFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "params.json")
+	if err := os.WriteFile(path, []byte(`{"rule_name":"from-file"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := loadParams(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m["rule_name"] != "from-file" {
+		t.Errorf("应按文件路径读取: %v", m)
+	}
+	// 目录路径不应被当作文件读取成功，也不应崩溃
+	if _, err := loadParams(t.TempDir()); err == nil {
+		t.Error("目录作为 params 应按内联 JSON 解析失败")
 	}
 }

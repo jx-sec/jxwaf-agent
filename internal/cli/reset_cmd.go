@@ -22,6 +22,7 @@ var resetRanges = []resetRange{
 	{"Web白名单", "rule_name", adapter.OpWebWhiteList, adapter.OpWebWhiteDelete},
 	{"Flow规则", "rule_name", adapter.OpFlowRuleList, adapter.OpFlowRuleDelete},
 	{"Flow白名单", "rule_name", adapter.OpFlowWhiteList, adapter.OpFlowWhiteDelete},
+	{"防篡改规则", "rule_name", adapter.OpTamperList, adapter.OpTamperDelete},
 	{"全局名单", "name_list_name", adapter.OpNameListList, adapter.OpNameListDelete},
 	{"防护组件", "name", adapter.OpComponentList, adapter.OpComponentDelete},
 }
@@ -49,7 +50,8 @@ func collectPlans(a *adapter.Adapter, c *client.Client) ([]planItem, error) {
 }
 
 // executePlans 逐条执行删除，返回结果明细与分类计数。
-func executePlans(a *adapter.Adapter, c *client.Client, plans []planItem) ([]map[string]any, map[string]int) {
+// 任一条失败即返回汇总 error（退出码 1），避免"全部失败仍 exit 0"的误判。
+func executePlans(a *adapter.Adapter, c *client.Client, plans []planItem) ([]map[string]any, map[string]int, error) {
 	summary := map[string]int{}
 	for _, p := range plans {
 		summary[p.rtype]++
@@ -73,7 +75,41 @@ func executePlans(a *adapter.Adapter, c *client.Client, plans []planItem) ([]map
 		}
 		results = append(results, map[string]any{"type": p.rtype, "name": p.name, "result": resp.Result, "message": resp.Message})
 	}
-	return results, summary
+	return results, summary, summarizeFailures("清空", results)
+}
+
+// summarizeFailures 汇总批量操作的失败条目；全部成功时返回 nil。
+func summarizeFailures(op string, results []map[string]any) error {
+	var fails []string
+	for _, r := range results {
+		if e, ok := r["error"].(string); ok {
+			fails = append(fails, fmt.Sprintf("%v: %s", r["name"], e))
+			continue
+		}
+		if res, ok := r["result"].(bool); ok && !res {
+			fails = append(fails, fmt.Sprintf("%v: %s", r["name"], r["message"]))
+		}
+	}
+	if len(fails) == 0 {
+		return nil
+	}
+	shown := fails
+	if len(shown) > 5 {
+		shown = append([]string{}, shown[:5]...)
+		shown = append(shown, fmt.Sprintf("...等共 %d 项失败", len(fails)))
+	}
+	return fmt.Errorf("%s操作有 %d/%d 项失败: %s", op, len(fails), len(results), joinFailures(shown))
+}
+
+func joinFailures(items []string) string {
+	out := ""
+	for i, s := range items {
+		if i > 0 {
+			out += "; "
+		}
+		out += s
+	}
+	return out
 }
 
 // newResetCmd 全量清空测试环境的业务配置（官方兜底"空环境"用，默认 dry-run）。
@@ -105,7 +141,10 @@ func newResetCmd() *cobra.Command {
 					"hint":    "预览未执行；确认后使用 --apply 清空（不可恢复；官方兜底建议挂每日定时）",
 				}, nil
 			}
-			results, summary := executePlans(a, c, plans)
+			results, summary, execErr := executePlans(a, c, plans)
+			if execErr != nil {
+				return nil, fmt.Errorf("清空未全部完成: %w", execErr)
+			}
 			return map[string]any{"summary": summary, "results": results}, nil
 		}),
 	}
@@ -131,25 +170,36 @@ func countByType(plans []planItem) map[string]int {
 	return summary
 }
 
-// listNames 翻页拉取列表并提取名称字段。
+// listPageLimit 单类资源的翻页防御上限（每页条数由服务端决定，通常 10 条/页）。
+const listPageLimit = 20
+
+// listNames 翻页拉取列表并提取名称字段（跨页去重）。
+// 达到翻页上限且最后一页仍有数据时报错，避免"全量清空"静默漏删。
 func listNames(a *adapter.Adapter, c *client.Client, op adapter.Op, nameKey string) ([]string, error) {
+	seen := map[string]bool{}
 	var names []string
-	for page := 1; page <= 20; page++ { // 防御上限 200 条/类
+	lastCount := -1
+	for page := 1; page <= listPageLimit; page++ {
 		raw, err := callOp(a, c, op, map[string]any{"page": page})
 		if err != nil {
 			return nil, err
 		}
 		records, _ := raw["records"].([]any)
-		if len(records) == 0 {
+		lastCount = len(records)
+		if lastCount == 0 {
 			break
 		}
 		for _, r := range records {
 			if m, ok := r.(map[string]any); ok {
-				if name, ok := m[nameKey].(string); ok && name != "" {
+				if name, ok := m[nameKey].(string); ok && name != "" && !seen[name] {
+					seen[name] = true
 					names = append(names, name)
 				}
 			}
 		}
+	}
+	if lastCount > 0 && len(seen) > 0 {
+		return nil, fmt.Errorf("资源数量超过翻页防御上限（%d 页），为避免静默漏删请先手动拆分处理", listPageLimit)
 	}
 	sort.Strings(names)
 	return names, nil

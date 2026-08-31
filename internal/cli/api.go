@@ -70,6 +70,7 @@ func cloneMap(m map[string]any) map[string]any {
 }
 
 // loadParams 解析 --params 值：文件路径、"-"（stdin）或内联 JSON；空值返回空对象。
+// 判定顺序：显式 "-" 走 stdin；路径存在（stat 成功）按文件读取（读失败报明确错误）；否则按内联 JSON。
 func loadParams(v string) (map[string]any, error) {
 	if v == "" {
 		return map[string]any{}, nil
@@ -83,7 +84,11 @@ func loadParams(v string) (map[string]any, error) {
 			return nil, fmt.Errorf("读取 stdin 失败: %w", err)
 		}
 	default:
-		if data, err := os.ReadFile(v); err == nil {
+		if fi, err := os.Stat(v); err == nil && !fi.IsDir() {
+			data, err := os.ReadFile(v)
+			if err != nil {
+				return nil, fmt.Errorf("读取参数文件失败 %s: %w", v, err)
+			}
 			raw = data
 		} else {
 			raw = []byte(v)
@@ -91,7 +96,7 @@ func loadParams(v string) (map[string]any, error) {
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("params 解析失败（需为 JSON 对象）: %w", err)
+		return nil, fmt.Errorf("params 解析失败（需为 JSON 对象；文件路径需存在且内容为 JSON）: %w", err)
 	}
 	if m == nil {
 		return map[string]any{}, nil

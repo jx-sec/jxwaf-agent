@@ -4,9 +4,13 @@
 // 差异呈现为规律的命名修饰：
 //
 //	standard      /admin_api/<suffix>
-//	professional  /admin_api/group_<suffix>   （仅防护类端点，需 body 带 group_name）
-//	cloud(admin)  /admin_api/sub_account_<suffix>（仅防护类端点）
+//	professional  /admin_api/group_<suffix>   （仅防护类端点；域名类路径无中缀但 body 必带 group_name）
+//	cloud(admin)  /admin_api/sub_account_<suffix>（仅防护类端点；域名类 body 必带 sub_user_name；
+//	                                              SSL 证书等专业版为全局模块、云WAF归属子账号）
 //	cloud(user)   /user/<suffix>              （子账号双 token）
+//
+// Op 常量与端点规格表见 ops.go；各 profile 的能力裁剪（unsupported）与
+// 命名差异覆盖（overrides）见本文件。
 package adapter
 
 import (
@@ -16,153 +20,13 @@ import (
 	"github.com/jx-sec/jxwaf-agent/internal/config"
 )
 
-// Op 逻辑操作名：命令层使用的、与版本无关的统一操作集合。
-type Op string
-
-const (
-	OpWebEngineGet     Op = "web_engine_get"
-	OpWebEngineEdit    Op = "web_engine_edit"
-	OpWebRuleList      Op = "web_rule_list"
-	OpWebRuleGet       Op = "web_rule_get"
-	OpWebRuleCreate    Op = "web_rule_create"
-	OpWebRuleDelete    Op = "web_rule_delete"
-	OpWebRuleEdit      Op = "web_rule_edit"
-	OpWebRuleStatus    Op = "web_rule_edit_status"
-	OpWebRuleLoad      Op = "web_rule_load"
-	OpWebWhiteList     Op = "web_white_list"
-	OpWebWhiteGet      Op = "web_white_get"
-	OpWebWhiteCreate   Op = "web_white_create"
-	OpWebWhiteDelete   Op = "web_white_delete"
-	OpWebWhiteEdit     Op = "web_white_edit"
-	OpWebWhiteStatus   Op = "web_white_edit_status"
-	OpWebWhiteLoad     Op = "web_white_load"
-	OpFlowEngineGet    Op = "flow_engine_get"
-	OpFlowEngineEdit   Op = "flow_engine_edit"
-	OpFlowRuleList     Op = "flow_rule_list"
-	OpFlowRuleGet      Op = "flow_rule_get"
-	OpFlowRuleCreate   Op = "flow_rule_create"
-	OpFlowRuleDelete   Op = "flow_rule_delete"
-	OpFlowRuleEdit     Op = "flow_rule_edit"
-	OpFlowRuleStatus   Op = "flow_rule_edit_status"
-	OpFlowRuleLoad     Op = "flow_rule_load"
-	OpFlowWhiteList    Op = "flow_white_list"
-	OpFlowWhiteGet     Op = "flow_white_get"
-	OpFlowWhiteCreate  Op = "flow_white_create"
-	OpFlowWhiteDelete  Op = "flow_white_delete"
-	OpFlowWhiteEdit    Op = "flow_white_edit"
-	OpFlowWhiteStatus  Op = "flow_white_edit_status"
-	OpFlowWhiteLoad    Op = "flow_white_load"
-	OpFlowIPRegionGet  Op = "flow_ip_region_get"
-	OpFlowIPRegionEdit Op = "flow_ip_region_edit"
-	OpDomainList       Op = "domain_list"
-	OpDomainGet        Op = "domain_get"
-	OpDomainCreate     Op = "domain_create"
-	OpDomainDelete     Op = "domain_delete"
-	OpDomainEdit       Op = "domain_edit"
-	OpNameListList     Op = "name_list_list"
-	OpNameListGet      Op = "name_list_get"
-	OpNameListCreate   Op = "name_list_create"
-	OpNameListDelete   Op = "name_list_delete"
-	OpNameListEdit     Op = "name_list_edit"
-	OpNameListStatus   Op = "name_list_edit_status"
-	OpNameListLoad     Op = "name_list_load"
-	OpNameListItemList Op = "name_list_item_list"
-	OpNameListItemAdd  Op = "name_list_item_add"
-	OpNameListItemDel  Op = "name_list_item_delete"
-	OpComponentList    Op = "component_list"
-	OpComponentGet     Op = "component_get"
-	OpComponentCreate  Op = "component_create"
-	OpComponentDelete  Op = "component_delete"
-	OpComponentEdit    Op = "component_edit"
-	OpComponentStatus  Op = "component_edit_status"
-	OpComponentLoad    Op = "component_load"
-	OpSocLogQuery      Op = "soc_log_query"
-	OpWebsiteAccList   Op = "website_access_list"
-	OpWebsiteAccGet    Op = "website_access_get"
-	OpWebsiteAccCreate Op = "website_access_create"
-	OpWebsiteAccDelete Op = "website_access_delete"
-	OpWebsiteAccEdit   Op = "website_access_edit"
-)
-
-// opSpec 描述一个逻辑操作在各版本中的端点构成。
-type opSpec struct {
-	suffix  string // 核心路径（不含 /admin_api/、/user/ 前缀与租户中缀）
-	grouped bool   // 防护类端点：professional 加 group_，cloud(admin) 加 sub_account_
-}
-
-// opSpecs 为统一的端点规格表；suffix 与三版路由表逐条一致。
-var opSpecs = map[Op]opSpec{
-	OpWebEngineGet:     {"get_web_engine_protection", true},
-	OpWebEngineEdit:    {"edit_web_engine_protection", true},
-	OpWebRuleList:      {"get_web_rule_protection_list", true},
-	OpWebRuleGet:       {"get_web_rule_protection", true},
-	OpWebRuleCreate:    {"create_web_rule_protection", true},
-	OpWebRuleDelete:    {"delete_web_rule_protection", true},
-	OpWebRuleEdit:      {"edit_web_rule_protection", true},
-	OpWebRuleStatus:    {"edit_web_rule_protection_status", true},
-	OpWebRuleLoad:      {"load_web_rule_protection", true},
-	OpWebWhiteList:     {"get_web_white_rule_list", true},
-	OpWebWhiteGet:      {"get_web_white_rule", true},
-	OpWebWhiteCreate:   {"create_web_white_rule", true},
-	OpWebWhiteDelete:   {"delete_web_white_rule", true},
-	OpWebWhiteEdit:     {"edit_web_white_rule", true},
-	OpWebWhiteStatus:   {"edit_web_white_rule_status", true},
-	OpWebWhiteLoad:     {"load_web_white_rule", true},
-	OpFlowEngineGet:    {"get_flow_engine_protection", true},
-	OpFlowEngineEdit:   {"edit_flow_engine_protection", true},
-	OpFlowRuleList:     {"get_flow_rule_protection_list", true},
-	OpFlowRuleGet:      {"get_flow_rule_protection", true},
-	OpFlowRuleCreate:   {"create_flow_rule_protection", true},
-	OpFlowRuleDelete:   {"delete_flow_rule_protection", true},
-	OpFlowRuleEdit:     {"edit_flow_rule_protection", true},
-	OpFlowRuleStatus:   {"edit_flow_rule_protection_status", true},
-	OpFlowRuleLoad:     {"load_flow_rule_protection", true},
-	OpFlowWhiteList:    {"get_flow_white_rule_list", true},
-	OpFlowWhiteGet:     {"get_flow_white_rule", true},
-	OpFlowWhiteCreate:  {"create_flow_white_rule", true},
-	OpFlowWhiteDelete:  {"delete_flow_white_rule", true},
-	OpFlowWhiteEdit:    {"edit_flow_white_rule", true},
-	OpFlowWhiteStatus:  {"edit_flow_white_rule_status", true},
-	OpFlowWhiteLoad:    {"load_flow_white_rule", true},
-	OpFlowIPRegionGet:  {"get_flow_ip_region_block", true},
-	OpFlowIPRegionEdit: {"edit_flow_ip_region_block", true},
-	OpDomainList:       {"get_domain_list", false},
-	OpDomainGet:        {"get_domain", false},
-	OpDomainCreate:     {"create_domain", false},
-	OpDomainDelete:     {"delete_domain", false},
-	OpDomainEdit:       {"edit_domain", false},
-	OpNameListList:     {"get_global_name_list_list", false},
-	OpNameListGet:      {"get_global_name_list", false},
-	OpNameListCreate:   {"create_global_name_list", false},
-	OpNameListDelete:   {"delete_global_name_list", false},
-	OpNameListEdit:     {"edit_global_name_list", false},
-	OpNameListStatus:   {"edit_global_name_list_status", false},
-	OpNameListLoad:     {"load_global_name_list", false},
-	OpNameListItemList: {"get_name_list_item_list_list", false},
-	OpNameListItemAdd:  {"create_global_name_list_item", false},
-	OpNameListItemDel:  {"delete_global_name_list_item", false},
-	OpComponentList:    {"get_component_list", false},
-	OpComponentGet:     {"get_component", false},
-	OpComponentCreate:  {"create_component", false},
-	OpComponentDelete:  {"delete_component", false},
-	OpComponentEdit:    {"edit_component", false},
-	OpComponentStatus:  {"edit_component_status", false},
-	OpComponentLoad:    {"load_component", false},
-	OpSocLogQuery:      {"get_soc_log_query_list", false},
-	OpWebsiteAccList:   {"get_website_access_conf_list", false},
-	OpWebsiteAccGet:    {"get_website_access_conf", false},
-	OpWebsiteAccCreate: {"create_website_access_conf", false},
-	OpWebsiteAccDelete: {"delete_website_access_conf", false},
-	OpWebsiteAccEdit:   {"edit_website_access_conf", false},
-}
-
 // profile 描述一个版本模式的端点与认证行为。
 type profile struct {
 	prefix      string          // 路径前缀：/admin_api 或 /user
 	tenantInfix string          // 防护类端点动词后的修饰中缀："" / group_ / sub_account_
 	authHeader  string          // 主认证头名
 	subAuthHead string          // 子账号认证头名（云WAF用户模式）
-	overrides   map[Op]string   // 端点覆盖（云WAF用户模式的特殊路径）
+	overrides   map[Op]string   // 端点覆盖（命名差异：standard/user 模式的特殊路径）
 	unsupported map[Op]struct{} // 该模式不支持的操作
 	needsGroup  bool            // 防护类请求 body 是否必须带 group_name
 }
@@ -175,24 +39,267 @@ func websiteAccOps() map[Op]struct{} {
 	}
 }
 
+// websiteAccExtraOps 仅云WAF(admin)支持的网站接入扩展操作（连通性测试/CNAME 管理/配额模板）。
+func websiteAccExtraOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpWebsiteAccConnectTest: {}, OpWebsiteAccCnameIps: {}, OpWebsiteAccCnameEdit: {},
+		OpWebsiteAccSync: {}, OpResourceQuotaTemplate: {},
+	}
+}
+
+// domainGroupOps 域名组管理操作（仅专业版支持：域名组为专业版多租户特性）。
+func domainGroupOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpDomainGroupList: {}, OpDomainGroupGet: {}, OpDomainGroupCreate: {},
+		OpDomainGroupDelete: {}, OpDomainGroupEdit: {}, OpDomainGroupSearch: {},
+	}
+}
+
+// backupLoadOps 规则/白名单/防篡改的备份与加载操作（/user 段无对应路由，用户模式不支持）。
+func backupLoadOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpWebRuleBackup: {}, OpWebWhiteBackup: {}, OpFlowRuleBackup: {}, OpFlowWhiteBackup: {},
+		OpTamperBackup: {},
+		OpWebRuleLoad: {}, OpWebWhiteLoad: {}, OpFlowRuleLoad: {}, OpFlowWhiteLoad: {},
+		OpTamperLoad: {},
+	}
+}
+
+// customOps 自定义配置全部操作（standard 无该模块）。
+func customOps() map[Op]struct{} {
+	out := make(map[Op]struct{}, 44)
+	for _, base := range []struct{ list, get, create, delete, edit, status, priority, backup, load, hubLoad, hubExport Op }{
+		{OpCustomReqHeaderList, OpCustomReqHeaderGet, OpCustomReqHeaderCreate, OpCustomReqHeaderDelete,
+			OpCustomReqHeaderEdit, OpCustomReqHeaderStatus, OpCustomReqHeaderPriority, OpCustomReqHeaderBackup,
+			OpCustomReqHeaderLoad, OpCustomReqHeaderHubLoad, OpCustomReqHeaderHubExport},
+		{OpCustomRespHeaderList, OpCustomRespHeaderGet, OpCustomRespHeaderCreate, OpCustomRespHeaderDelete,
+			OpCustomRespHeaderEdit, OpCustomRespHeaderStatus, OpCustomRespHeaderPriority, OpCustomRespHeaderBackup,
+			OpCustomRespHeaderLoad, OpCustomRespHeaderHubLoad, OpCustomRespHeaderHubExport},
+		{OpCustomRespContentList, OpCustomRespContentGet, OpCustomRespContentCreate, OpCustomRespContentDelete,
+			OpCustomRespContentEdit, OpCustomRespContentStatus, OpCustomRespContentPriority, OpCustomRespContentBackup,
+			OpCustomRespContentLoad, OpCustomRespContentHubLoad, OpCustomRespContentHubExport},
+		{OpCustomUpstreamList, OpCustomUpstreamGet, OpCustomUpstreamCreate, OpCustomUpstreamDelete,
+			OpCustomUpstreamEdit, OpCustomUpstreamStatus, OpCustomUpstreamPriority, OpCustomUpstreamBackup,
+			OpCustomUpstreamLoad, OpCustomUpstreamHubLoad, OpCustomUpstreamHubExport},
+	} {
+		for _, op := range []Op{base.list, base.get, base.create, base.delete, base.edit,
+			base.status, base.priority, base.backup, base.load, base.hubLoad, base.hubExport} {
+			out[op] = struct{}{}
+		}
+	}
+	return out
+}
+
+// backupLoadHubOps 自定义配置/缓存策略的备份/加载/Hub 操作（/user 段无，用户模式不支持）。
+func backupLoadHubOps() map[Op]struct{} {
+	out := make(map[Op]struct{}, 28)
+	for _, g := range [][]Op{
+		{OpCustomReqHeaderBackup, OpCustomReqHeaderLoad, OpCustomReqHeaderHubLoad, OpCustomReqHeaderHubExport},
+		{OpCustomRespHeaderBackup, OpCustomRespHeaderLoad, OpCustomRespHeaderHubLoad, OpCustomRespHeaderHubExport},
+		{OpCustomRespContentBackup, OpCustomRespContentLoad, OpCustomRespContentHubLoad, OpCustomRespContentHubExport},
+		{OpCustomUpstreamBackup, OpCustomUpstreamLoad, OpCustomUpstreamHubLoad, OpCustomUpstreamHubExport},
+		{OpCachePolicyBackup, OpCachePolicyLoad, OpCachePolicyHubLoad, OpCachePolicyHubExport},
+		{OpNoCachePolicyBackup, OpNoCachePolicyLoad, OpNoCachePolicyHubLoad, OpNoCachePolicyHubExport},
+		{OpCacheBypassBackup, OpCacheBypassLoad, OpCacheBypassHubLoad, OpCacheBypassHubExport},
+	} {
+		for _, op := range g {
+			out[op] = struct{}{}
+		}
+	}
+	return out
+}
+
+// cachePolicyOps 缓存策略全部操作（standard/professional 无该模块，仅云WAF）。
+func cachePolicyOps() map[Op]struct{} {
+	out := make(map[Op]struct{}, 33)
+	for _, g := range [][]Op{
+		{OpCachePolicyList, OpCachePolicyGet, OpCachePolicyCreate, OpCachePolicyDelete, OpCachePolicyEdit,
+			OpCachePolicyStatus, OpCachePolicyPriority, OpCachePolicyBackup, OpCachePolicyLoad,
+			OpCachePolicyHubLoad, OpCachePolicyHubExport},
+		{OpNoCachePolicyList, OpNoCachePolicyGet, OpNoCachePolicyCreate, OpNoCachePolicyDelete, OpNoCachePolicyEdit,
+			OpNoCachePolicyStatus, OpNoCachePolicyPriority, OpNoCachePolicyBackup, OpNoCachePolicyLoad,
+			OpNoCachePolicyHubLoad, OpNoCachePolicyHubExport},
+		{OpCacheBypassList, OpCacheBypassGet, OpCacheBypassCreate, OpCacheBypassDelete, OpCacheBypassEdit,
+			OpCacheBypassStatus, OpCacheBypassPriority, OpCacheBypassBackup, OpCacheBypassLoad,
+			OpCacheBypassHubLoad, OpCacheBypassHubExport},
+	} {
+		for _, op := range g {
+			out[op] = struct{}{}
+		}
+	}
+	return out
+}
+
+// cacheCloudOps 云WAF专属缓存能力（缓存任务仅云WAF）。
+func cacheCloudOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpCacheWarmupCreate: {}, OpCacheWarmupList: {}, OpCacheWarmupDetail: {}, OpCacheWarmupDelete: {},
+		OpCacheRefreshCreate: {}, OpCacheRefreshList: {}, OpCacheRefreshDetail: {}, OpCacheRefreshDelete: {},
+	}
+}
+
+// userOnlyCacheOps 仅 /user 段存在的缓存操作（缓存开关与 CDN 预热/刷新）。
+func userOnlyCacheOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpCacheSwitchGet: {}, OpCacheSwitchEdit: {}, OpCdnPreheat: {}, OpCdnRefresh: {},
+	}
+}
+
+// subAccountOps 子账号管理操作（仅云WAF admin 模式）。
+func subAccountOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpSubAccountList: {}, OpSubAccountSearch: {}, OpSubAccountGet: {}, OpSubAccountCreate: {},
+		OpSubAccountDelete: {}, OpSubAccountEdit: {}, OpSubAccountWafAuth: {}, OpSubAccountOtpReset: {},
+	}
+}
+
+// sysConfOps 系统配置操作（standard 无该模块；/user 段仅报表配置只读）。
+func sysConfOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpSysLogConfGet: {}, OpSysLogConfEdit: {},
+		OpSysReportConfGet: {}, OpSysReportConfEdit: {}, OpSysReportConfTest: {},
+		OpSysCustomPageGet: {}, OpSysCustomPageEdit: {},
+		OpSysWebtdsGet: {}, OpSysWebtdsEdit: {},
+		OpWafConfBackup: {}, OpWafConfLoad: {},
+	}
+}
+
+// socModelOps SOC AI 模型操作（/user 段无）。
+func socModelOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpSocModelList: {}, OpSocModelDelete: {}, OpSocModelResultEdit: {},
+		OpSocModelWhiteList: {}, OpSocModelWhiteCreate: {}, OpSocModelWhiteDelete: {},
+	}
+}
+
+// networkIpOps SOC 网络封禁 IP 操作（/user 段无）。
+func networkIpOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpNetworkIpList: {}, OpNetworkIpSearch: {}, OpNetworkIpGet: {}, OpNetworkIpCreate: {},
+		OpNetworkIpEdit: {}, OpNetworkIpStatusGet: {}, OpNetworkIpStatusEdit: {}, OpNetworkIpNodeUpdate: {},
+	}
+}
+
+// flowStatsOps SOC 流量攻击统计（standard 无该模块）。
+func flowStatsOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpSocFlowAttackCountTotal: {}, OpSocFlowAttackApiCountTotal: {}, OpSocFlowAttackIpCountTotal: {},
+		OpSocFlowAttackIsocodeCountTotal: {}, OpSocFlowAttackGeoip: {}, OpSocFlowAttackCountTrend: {},
+		OpSocFlowAttackApiTop: {}, OpSocFlowAttackTypeTop: {}, OpSocFlowAttackIpTop: {}, OpSocFlowAttackIsocodeTop: {},
+	}
+}
+
+// globalSslOps 全局 SSL 协议防护（仅云WAF admin）。
+func globalSslOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpGlobalSslGet: {}, OpGlobalSslEdit: {}, OpGlobalSslStatus: {},
+	}
+}
+
+// monitorOps 节点监控操作（/user 段无）。
+func monitorOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpNodeMonitorList: {}, OpNodeMonitorDelete: {},
+	}
+}
+
+// hubOps 规则/白名单/防篡改/名单/组件的 Hub 配置中心操作（/user 段无）。
+func hubOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpWebRuleHubLoad: {}, OpWebRuleHubExport: {},
+		OpWebWhiteHubLoad: {}, OpWebWhiteHubExport: {},
+		OpFlowRuleHubLoad: {}, OpFlowRuleHubExport: {},
+		OpFlowWhiteHubLoad: {}, OpFlowWhiteHubExport: {},
+		OpTamperHubLoad: {}, OpTamperHubExport: {},
+		OpNameListHubLoad: {}, OpNameListHubExport: {},
+		OpComponentHubLoad: {}, OpComponentHubExport: {},
+	}
+}
+
+// userUnavailableOps 用户模式额外不支持的操作集合：
+// /user 段无优先级交换（名单/组件）、无网络封禁、无 AI 模型、无节点监控、
+// 无子账号管理、无系统配置写、无域名组、无网站接入、无 Hub。
+func userUnavailableOps() map[Op]struct{} {
+	return unionOps(
+		map[Op]struct{}{
+			OpNameListPriority: {}, OpComponentPriority: {},
+		},
+		networkIpOps(), socModelOps(), monitorOps(), subAccountOps(),
+		// 系统配置仅保留报表配置只读（overrides 映射到 /user/get_sys_report_conf_conf）
+		minusOps(sysConfOps(), map[Op]struct{}{OpSysReportConfGet: {}}),
+	)
+}
+
+// socWebAttackStandardOverrides Standard 版 SOC Web 攻击统计的命名映射
+// （standard 命名为 get_web_attack_* 且用 ranking 而非 top、count 而非 count_total）。
+var socWebAttackStandardOverrides = map[Op]string{
+	OpSocWebAttackCountTotal:        "/admin_api/get_web_attack_count_total",
+	OpSocWebAttackApiCountTotal:     "/admin_api/get_web_attack_api_count",
+	OpSocWebAttackIpCountTotal:      "/admin_api/get_web_attack_ip_count",
+	OpSocWebAttackIsocodeCountTotal: "/admin_api/get_web_attack_country_count",
+	OpSocWebAttackCountTrend:        "/admin_api/get_web_attack_trend",
+	OpSocWebAttackApiTop:            "/admin_api/get_web_attack_api_ranking",
+	OpSocWebAttackTypeTop:           "/admin_api/get_web_attack_type_ranking",
+	OpSocWebAttackIpTop:             "/admin_api/get_web_attack_ip_ranking",
+	OpSocWebAttackIsocodeTop:        "/admin_api/get_web_attack_country_ranking",
+}
+
+// socStatsUserOverrides 云WAF用户模式 SOC 统计命名映射（/user 段无 soc_ 前缀）。
+var socStatsUserOverrides = map[Op]string{
+	OpSocWebAttackCountTotal:        "/user/get_web_attack_count_total",
+	OpSocWebAttackApiCountTotal:     "/user/get_web_attack_api_count_total",
+	OpSocWebAttackIpCountTotal:      "/user/get_web_attack_ip_count_total",
+	OpSocWebAttackIsocodeCountTotal: "/user/get_web_attack_isocode_count_total",
+	OpSocWebAttackGeoip:             "/user/get_web_attack_geoip",
+	OpSocWebAttackCountTrend:        "/user/get_web_attack_count_trend",
+	OpSocWebAttackApiTop:            "/user/get_web_attack_api_top",
+	OpSocWebAttackTypeTop:           "/user/get_web_attack_type_top",
+	OpSocWebAttackIpTop:             "/user/get_web_attack_ip_top",
+	OpSocWebAttackIsocodeTop:        "/user/get_web_attack_isocode_top",
+	OpSocFlowAttackCountTotal:        "/user/get_flow_attack_count_total",
+	OpSocFlowAttackApiCountTotal:     "/user/get_flow_attack_api_count_total",
+	OpSocFlowAttackIpCountTotal:      "/user/get_flow_attack_ip_count_total",
+	OpSocFlowAttackIsocodeCountTotal: "/user/get_flow_attack_isocode_count_total",
+	OpSocFlowAttackGeoip:             "/user/get_flow_attack_geoip",
+	OpSocFlowAttackCountTrend:        "/user/get_flow_attack_count_trend",
+	OpSocFlowAttackApiTop:            "/user/get_flow_attack_api_top",
+	OpSocFlowAttackTypeTop:           "/user/get_flow_attack_type_top",
+	OpSocFlowAttackIpTop:             "/user/get_flow_attack_ip_top",
+	OpSocFlowAttackIsocodeTop:        "/user/get_flow_attack_isocode_top",
+	OpSocEventList:                   "/user/get_attack_event_list",
+	OpSocBehaveTrack:                 "/user/get_attack_behave_track",
+	OpSysReportConfGet:               "/user/get_sys_report_conf_conf",
+}
+
 var (
 	profileStandard = profile{
 		prefix:      "/admin_api",
 		tenantInfix: "",
-		authHeader:  "jxwaf_waf_auth",
-		unsupported: websiteAccOps(),
+		// 认证头为中划线：服务端 ngx.var.http_jxwaf_waf_auth 由 nginx 将中划线转下划线映射而来；
+		// 若发送下划线头会被 nginx 默认行为丢弃（underscores_in_headers off）
+		authHeader: "jxwaf-waf-auth",
+		overrides:  socWebAttackStandardOverrides,
+		unsupported: unionOps(websiteAccOps(), websiteAccExtraOps(), domainGroupOps(),
+			customOps(), cachePolicyOps(), cacheCloudOps(), userOnlyCacheOps(),
+			subAccountOps(), sysConfOps(), flowStatsOps(), globalSslOps(),
+			map[Op]struct{}{
+				// standard 无 geoip 统计（接口集差异）
+				OpSocWebAttackGeoip: {},
+			}),
 	}
 	profileProfessional = profile{
 		prefix:      "/admin_api",
 		tenantInfix: "group_",
-		authHeader:  "jxwaf_waf_auth",
+		authHeader:  "jxwaf-waf-auth",
 		needsGroup:  true,
-		unsupported: websiteAccOps(),
+		unsupported: unionOps(websiteAccOps(), websiteAccExtraOps(), cachePolicyOps(),
+			cacheCloudOps(), userOnlyCacheOps(), subAccountOps(), globalSslOps()),
 	}
 	profileCloudAdmin = profile{
 		prefix:      "/admin_api",
 		tenantInfix: "sub_account_",
 		authHeader:  "jxwaf-waf-auth",
+		unsupported: unionOps(domainGroupOps(), userOnlyCacheOps()),
 	}
 	profileCloudUser = profile{
 		prefix:      "/user",
@@ -203,17 +310,59 @@ var (
 			OpNameListList:    "/user/api_get_global_name_list_list",
 			OpNameListItemAdd: "/user/create_global_name_list_item",
 		},
-		unsupported: map[Op]struct{}{
-			OpNameListGet: {}, OpNameListCreate: {}, OpNameListDelete: {},
-			OpNameListEdit: {}, OpNameListStatus: {}, OpNameListLoad: {},
-			OpNameListItemList: {}, OpNameListItemDel: {},
-			OpComponentList: {}, OpComponentGet: {}, OpComponentCreate: {},
-			OpComponentDelete: {}, OpComponentEdit: {}, OpComponentStatus: {}, OpComponentLoad: {},
-			OpWebsiteAccList: {}, OpWebsiteAccGet: {}, OpWebsiteAccCreate: {},
-			OpWebsiteAccDelete: {}, OpWebsiteAccEdit: {},
-		},
+		unsupported: unionOps(websiteAccOps(), websiteAccExtraOps(), domainGroupOps(),
+			backupLoadOps(), backupLoadHubOps(), hubOps(),
+			nameListManageOps(), componentOps(),
+			userUnavailableOps()),
 	}
 )
+
+// 合并 socStatsUserOverrides 到 cloudUser overrides（单独合并避免字面量过长）。
+func init() {
+	for op, p := range socStatsUserOverrides {
+		profileCloudUser.overrides[op] = p
+	}
+}
+
+// nameListManageOps 用户模式不支持的名单管理操作（仅保留列表查询与条目新增）。
+func nameListManageOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpNameListGet: {}, OpNameListCreate: {}, OpNameListDelete: {},
+		OpNameListEdit: {}, OpNameListStatus: {}, OpNameListLoad: {}, OpNameListBackup: {},
+		OpNameListItemList: {}, OpNameListItemDel: {}, OpNameListItemSearch: {},
+	}
+}
+
+// componentOps 全部组件管理操作（用户模式不支持）。
+func componentOps() map[Op]struct{} {
+	return map[Op]struct{}{
+		OpComponentList: {}, OpComponentGet: {}, OpComponentCreate: {},
+		OpComponentDelete: {}, OpComponentEdit: {}, OpComponentStatus: {}, OpComponentLoad: {},
+		OpComponentBackup: {},
+	}
+}
+
+// unionOps 合并多个操作集合。
+func unionOps(sets ...map[Op]struct{}) map[Op]struct{} {
+	out := map[Op]struct{}{}
+	for _, s := range sets {
+		for op := range s {
+			out[op] = struct{}{}
+		}
+	}
+	return out
+}
+
+// minusOps 从集合中排除指定操作。
+func minusOps(set map[Op]struct{}, exclude map[Op]struct{}) map[Op]struct{} {
+	out := make(map[Op]struct{}, len(set))
+	for op := range set {
+		if _, ok := exclude[op]; !ok {
+			out[op] = struct{}{}
+		}
+	}
+	return out
+}
 
 // Adapter 屏蔽版本差异，提供端点映射与认证头。
 type Adapter struct {
@@ -236,36 +385,65 @@ func New(env config.Environment) (*Adapter, error) {
 	case config.VersionProfessional:
 		p = profileProfessional
 	case config.VersionCloud:
-		if env.SubWafAuth != "" {
+		// 显式模式优先（cloud_mode）；未配置时按是否配置 sub_waf_auth 隐式推断（兼容旧配置）。
+		// 注意：显式 admin 模式可携带 sub_waf_auth 但不使用它，避免"配置了子账号凭据就无法用主账号管理"。
+		switch env.CloudMode {
+		case config.ModeUser:
+			if env.SubWafAuth == "" {
+				return nil, fmt.Errorf("cloud_mode=user 缺少 sub_waf_auth 凭据（config set 时提供 --sub-waf-auth）")
+			}
 			p = profileCloudUser
-		} else {
+		case config.ModeAdmin:
 			p = profileCloudAdmin
+		default:
+			if env.SubWafAuth != "" {
+				p = profileCloudUser
+			} else {
+				p = profileCloudAdmin
+			}
 		}
 	}
 	return &Adapter{profile: p, env: env}, nil
 }
 
 // Path 将逻辑操作映射为当前环境的真实请求路径。
+// 能力校验（unsupported）先于端点覆盖（overrides），防止覆盖表意外绕过能力限制。
 func (a *Adapter) Path(op Op) (string, error) {
-	if p, ok := a.profile.overrides[op]; ok {
-		return p, nil
-	}
-	spec, ok := opSpecs[op]
-	if !ok {
+	if _, ok := opSpecs[op]; !ok {
 		return "", fmt.Errorf("未知操作: %s", op)
 	}
 	if _, no := a.profile.unsupported[op]; no {
 		return "", fmt.Errorf("当前环境（%s）不支持该操作", a.env.Version)
 	}
-	if !spec.grouped || a.profile.tenantInfix == "" {
-		return a.profile.prefix + "/" + spec.suffix, nil
+	if p, ok := a.profile.overrides[op]; ok {
+		return p, nil
 	}
-	// 修饰中缀插在动词后：get_web_rule_protection_list → get_group_web_rule_protection_list
-	verb, rest, ok := strings.Cut(spec.suffix, "_")
-	if !ok {
-		return "", fmt.Errorf("端点规格非法: %s", spec.suffix)
+	spec := opSpecs[op]
+	if infix := a.infixOf(spec.mode); infix != "" {
+		// 修饰中缀插在动词后：get_web_rule_protection_list → get_group_web_rule_protection_list
+		verb, rest, ok := strings.Cut(spec.suffix, "_")
+		if !ok {
+			return "", fmt.Errorf("端点规格非法: %s", spec.suffix)
+		}
+		return a.profile.prefix + "/" + verb + "_" + infix + rest, nil
 	}
-	return a.profile.prefix + "/" + verb + "_" + a.profile.tenantInfix + rest, nil
+	return a.profile.prefix + "/" + spec.suffix, nil
+}
+
+// infixOf 计算指定租户形态在当前 profile 下应插入的路径中缀。
+func (a *Adapter) infixOf(mode tenantMode) string {
+	switch mode {
+	case modeProtection:
+		return a.profile.tenantInfix
+	case modeCloudSub:
+		// 云子账号类仅云WAF主账号模式加中缀；standard/professional 为全局模块
+		if a.profile.tenantInfix == "sub_account_" {
+			return a.profile.tenantInfix
+		}
+		return ""
+	default:
+		return ""
+	}
 }
 
 // HeaderMap 返回当前环境的认证请求头。
@@ -280,6 +458,9 @@ func (a *Adapter) HeaderMap() map[string]string {
 // NeedsGroup 表示防护类请求 body 必须携带 group_name（专业版）。
 func (a *Adapter) NeedsGroup() bool { return a.profile.needsGroup }
 
+// EnvName 返回当前环境名（供 dry-run 预览标注目标环境）。
+func (a *Adapter) EnvName() string { return a.env.Name }
+
 // GroupName 返回该环境的默认域名组（专业版）。
 func (a *Adapter) GroupName() string { return a.env.GroupName }
 
@@ -289,11 +470,15 @@ type TenantOpts struct {
 	SubUser string // 云WAF(admin)子账号名
 }
 
-// InjectTenant 为防护类操作注入租户 body 参数：
-// 专业版注入 group_name，云WAF(admin) 注入 sub_user_name；其余操作与版本为空操作。
+// InjectTenant 为需要租户参数的操作注入 body 字段：
+// 专业版注入 group_name，云WAF(admin) 注入 sub_user_name；域名类与防护类必带，
+// 云子账号类（SSL）仅云WAF(admin) 必带；其余为空操作。
 func (a *Adapter) InjectTenant(op Op, body map[string]any, opts TenantOpts) error {
 	spec, ok := opSpecs[op]
-	if !ok || !spec.grouped {
+	if !ok {
+		return fmt.Errorf("未知操作: %s", op)
+	}
+	if !a.needsTenant(spec.mode) {
 		return nil
 	}
 	switch a.profile.tenantInfix {
@@ -303,7 +488,7 @@ func (a *Adapter) InjectTenant(op Op, body map[string]any, opts TenantOpts) erro
 			g = a.env.GroupName
 		}
 		if g == "" {
-			return fmt.Errorf("专业版防护操作需要 group_name：请用 --group 指定，或 config set 时提供 --group-name")
+			return fmt.Errorf("专业版该操作需要 group_name（防护类与域名类）：请用 --group 指定，或 config set 时提供 --group-name")
 		}
 		body["group_name"] = g
 	case "sub_account_":
@@ -317,4 +502,16 @@ func (a *Adapter) InjectTenant(op Op, body map[string]any, opts TenantOpts) erro
 		body["sub_user_name"] = su
 	}
 	return nil
+}
+
+// needsTenant 判断指定租户形态在当前 profile 下 body 是否必带租户参数。
+func (a *Adapter) needsTenant(mode tenantMode) bool {
+	switch mode {
+	case modeBody, modeProtection:
+		return a.profile.tenantInfix != ""
+	case modeCloudSub:
+		return a.profile.tenantInfix == "sub_account_"
+	default:
+		return false
+	}
 }

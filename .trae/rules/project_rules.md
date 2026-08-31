@@ -5,10 +5,10 @@
 ## 一、工具链
 
 - CLI 构建：`go build -o jxwaf-cli ./cmd/cli`；开发调试：`go run ./cmd/cli`
-- 本地配置：`~/.jxwaf/config.json`（凭据文件，权限 0600）；**官方沙盒初始化：`jxwaf-cli sandbox init`（独立命令组，不影响自有环境 active）**
+- 本地配置：项目目录 `config.json`（与 jxwaf-cli 同级；凭据文件，权限 0600，已 gitignore）；**官方沙盒初始化：`jxwaf-cli sandbox init`（独立命令组，不影响自有环境 active）**
 - 环境选择：`--env <name>` 全局参数，默认取配置中的 `active`
 - 项目文档：`docs/`（需求基线 requirements.md、命令参考、模块规范、SOP）
-- 权威参考：产品文档 docs.jxwaf.com；管理 API 字段规范以 jxwaf_admin_server 各版 `ADMIN_API_DOCUMENT.md` 为准（不确定参数格式时查阅）
+- 权威参考：产品文档 docs.jxwaf.com（按版本分站 /jxwaf-standard/、/jxwaf-professional/、/jxwaf-cloud/，部署类看各站 Deployment-Tutorial）；管理 API 字段规范以 jxwaf_admin_server 各版 `ADMIN_API_DOCUMENT.md` 为准（不确定参数格式时查阅）。本地 docs/ 为快照，与官方不一致或需最新信息（镜像版本/部署命令/新功能）时以官方为准
 
 ## 二、输出契约（必须遵守）
 
@@ -42,8 +42,9 @@
 
 ## 四、标准工作流 (SOP)
 
-基础循环：`需求分析 → 信息澄清 → 按需读文档 → generate 生成配置 → 测试环境部署验证 → 用户确认 → 生产下发 → 结果反馈`
+基础循环：`环境就绪检查 → 需求分析 → 信息澄清 → 按需读文档 → generate 生成配置 → 测试环境部署验证 → 用户确认 → 生产下发 → 结果反馈`
 
+0. **环境就绪检查（第一步，必须）**：先跑 `config show` 确认 `config.json` 已初始化（active 环境或沙盒环境存在），已初始化用 `config validate` 确认连通性。**未初始化时提醒用户先初始化（沙盒 `sandbox init` / 自有环境 `config set`）并终止流程**，不进入 generate/apply/verify 环节
 1. 分析需求选择模块（规则/名单/组件/网站）；不确定字段规范时读 `docs/` 对应文档
 2. 写参数 JSON 文件 → `generate` 生成规范配置
 3. 官方沙盒（**独立命令组 `sandbox`**，与自有环境隔离；`sandbox init` 一次性配置）：

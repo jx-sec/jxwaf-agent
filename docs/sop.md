@@ -42,6 +42,8 @@
 
 官方沙盒用独立命令组 `sandbox`（verify/cleanup/reset），与自有环境命令隔离；自有环境验证用通用 `verify --url`（只发流量不动配置）。官方兜底每日 `sandbox reset --apply`。
 
+**最新文档查阅**：本地 `docs/` 是编写时的快照。当本地文档与线上行为有出入、或需要最新信息（部署镜像版本、环境要求、新功能、字段规范）时，到 **docs.jxwaf.com** 查阅官方最新文档（按版本分站：`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/`；部署类看各站 `Deployment-Tutorial`，字段规范以各版 `ADMIN_API_DOCUMENT.md` 为准），以官方为准。
+
 ## 异常处理
 
 | 现象 | 处置 |

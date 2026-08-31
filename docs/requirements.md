@@ -125,7 +125,7 @@ jxwaf-cli soc log query ...                     # 只读日志查询（验证误
   - 三版本差异说明
   - 安全工作规范（SOP + 红线）
 - IDE 集成文件（多 IDE 通用）：
-  - `CLAUDE.md`、`AGENTS.md`
+  - `AGENTS.md`
   - `.trae/rules/`、`.cursor/rules/`
   - 各 IDE 接入说明
 
@@ -162,6 +162,6 @@ jxwaf-cli soc log query ...                     # 只读日志查询（验证误
 ## 11. 开放项（开发中跟踪）
 
 - ~~官方云测试环境凭据获取~~ 已定：**专业版固定沙盒**（waf-demo.jxwaf.com 固定共享账号），独立命令组 `jxwaf-cli sandbox`（init/verify/cleanup/reset）与自有环境命令彻底隔离；`sandbox verify` 一键闭环自动回到空环境，官方挂定时 `sandbox reset --apply` 兜底
-- 待官方提供：官方测试域名（sandbox verify 默认 `--url` 值，代码内 `defaultOfficialTestURL` 占位）+ demo 部署开启 `ADMIN_API_ENABLE=true`、`ADMIN_API_WHITELIST=*`
+- ~~待官方提供：官方测试域名 + demo 部署开启 Admin API~~ 已定：测试域名 `https://waf-demo.jxwaf.com:4443`（代码内 `defaultSandboxTestURL`），沙盒 Admin API 已开启（`ADMIN_API_WHITELIST=*`）
 - 二进制发布方式（GitHub Release / go install）
 - 仓库远端旧分支清理与首次推送方式

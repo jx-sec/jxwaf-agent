@@ -16,11 +16,14 @@ type cleanupResource struct {
 }
 
 var cleanupResources = map[string]cleanupResource{
-	"web-rule":  {"rule_name", adapter.OpWebRuleDelete},
-	"flow-rule": {"rule_name", adapter.OpFlowRuleDelete},
-	"name-list": {"name_list_name", adapter.OpNameListDelete},
-	"component": {"name", adapter.OpComponentDelete},
-	"website":   {"domain", adapter.OpDomainDelete},
+	"web-rule":   {"rule_name", adapter.OpWebRuleDelete},
+	"flow-rule":  {"rule_name", adapter.OpFlowRuleDelete},
+	"web-white":  {"rule_name", adapter.OpWebWhiteDelete},
+	"flow-white": {"rule_name", adapter.OpFlowWhiteDelete},
+	"tamper":     {"rule_name", adapter.OpTamperDelete},
+	"name-list":  {"name_list_name", adapter.OpNameListDelete},
+	"component":  {"name", adapter.OpComponentDelete},
+	"website":    {"domain", adapter.OpDomainDelete},
 }
 
 // runCleanup 按类型与名称批量删除配置（dry-run 预览或执行），供通用命令与云端沙盒命令复用。
@@ -72,6 +75,10 @@ func runCleanup(a *adapter.Adapter, c *client.Client, rtype, names string, apply
 		}
 		results = append(results, map[string]any{res.field: n, "result": resp.Result, "message": resp.Message})
 	}
+	// 任一条失败即报错（退出码 1），避免"全部失败仍 exit 0"的误判
+	if err := summarizeFailures("删除", results); err != nil {
+		return nil, fmt.Errorf("批量删除未全部完成: %w", err)
+	}
 	return map[string]any{"type": rtype, "results": results}, nil
 }
 
@@ -92,7 +99,7 @@ func newCleanupCmd() *cobra.Command {
 			return runCleanup(a, c, rtype, names, apply)
 		}),
 	}
-	cmd.Flags().StringVar(&rtype, "type", "", "资源类型：web-rule/flow-rule/name-list/component/website")
+	cmd.Flags().StringVar(&rtype, "type", "", "资源类型：web-rule/flow-rule/web-white/flow-white/tamper/name-list/component/website")
 	cmd.Flags().StringVar(&names, "names", "", "资源名称（逗号分隔）")
 	cmd.Flags().Bool("apply", false, "实际执行删除（默认 dry-run 预览，删除不可恢复）")
 	return cmd

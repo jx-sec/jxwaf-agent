@@ -9,7 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// writeCmd 构造写入子命令：默认 dry-run 预览（路径+请求体），--apply 才实际执行。
+// writeCmd 构造写入子命令：默认 dry-run 预览（环境+路径+请求体），--apply 才实际执行。
+// 预览中包含 env 与 base_url，防止 dry-run 与 --apply 两次调用间 --env 不一致导致下发到错误环境。
 func writeCmd(name string, short string, op adapter.Op) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   name,
@@ -34,10 +35,12 @@ func writeCmd(name string, short string, op adapter.Op) *cobra.Command {
 			}
 			if !apply {
 				return map[string]any{
-					"dry_run": true,
-					"path":    path,
-					"body":    body,
-					"hint":    "预览未执行；确认后使用 --apply 实际执行",
+					"dry_run":  true,
+					"env":      a.EnvName(),
+					"base_url": c.BaseURL,
+					"path":     path,
+					"body":     body,
+					"hint":     "预览未执行；确认后使用 --apply 实际执行",
 				}, nil
 			}
 			resp, err := c.Post(path, a.HeaderMap(), body)
@@ -65,14 +68,13 @@ type configEnvelope struct {
 
 // createToEdit 生成类型的创建操作 → 编辑操作映射（apply --update 使用）。
 var createToEdit = map[adapter.Op]adapter.Op{
-	adapter.OpWebRuleCreate:    adapter.OpWebRuleEdit,
-	adapter.OpWebWhiteCreate:   adapter.OpWebWhiteEdit,
-	adapter.OpFlowRuleCreate:   adapter.OpFlowRuleEdit,
-	adapter.OpFlowWhiteCreate:  adapter.OpFlowWhiteEdit,
-	adapter.OpNameListCreate:   adapter.OpNameListEdit,
-	adapter.OpComponentCreate:  adapter.OpComponentEdit,
-	adapter.OpDomainCreate:     adapter.OpDomainEdit,
-	adapter.OpWebsiteAccCreate: adapter.OpWebsiteAccEdit,
+	adapter.OpWebRuleCreate:   adapter.OpWebRuleEdit,
+	adapter.OpWebWhiteCreate:  adapter.OpWebWhiteEdit,
+	adapter.OpFlowRuleCreate:  adapter.OpFlowRuleEdit,
+	adapter.OpFlowWhiteCreate: adapter.OpFlowWhiteEdit,
+	adapter.OpNameListCreate:  adapter.OpNameListEdit,
+	adapter.OpComponentCreate: adapter.OpComponentEdit,
+	adapter.OpDomainCreate:    adapter.OpDomainEdit,
 }
 
 func newApplyCmd() *cobra.Command {
@@ -113,10 +115,12 @@ func newApplyCmd() *cobra.Command {
 			apply, _ := cmd.Flags().GetBool("apply")
 			if !apply {
 				return map[string]any{
-					"dry_run": true,
-					"path":    path,
-					"body":    body,
-					"hint":    "预览未执行；确认后使用 --apply 实际执行",
+					"dry_run":  true,
+					"env":      a.EnvName(),
+					"base_url": c.BaseURL,
+					"path":     path,
+					"body":     body,
+					"hint":     "预览未执行；确认后使用 --apply 实际执行",
 				}, nil
 			}
 			resp, err := c.Post(path, a.HeaderMap(), body)
