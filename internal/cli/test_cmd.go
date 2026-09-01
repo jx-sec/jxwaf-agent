@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -17,34 +16,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// 官方测试沙盒：专业版固定账号 + 固定设施，所有人共享（沙盒约定：验证流程自动回到空环境）。
-// 官方沙盒使用独立命令组 `jxwaf-cli sandbox`，与自有环境命令彻底分开。
-// 沙盒管理地址默认取内置常量（公开非凭据），可用环境变量 JXWAF_OFFICIAL_BASE_URL
-// 或命令行 --base-url 覆盖；沙盒主凭据经环境变量 JXWAF_OFFICIAL_MASTER_AUTH 注入
-// （凭据红线：严禁明文写入源码/文件）。
-// test_url 为沙盒环境的测试站点地址（配置下发到沙盒后访问它验证规则生效），
-// 保存在沙盒环境定义中（environments.<sandbox>.test_url），官方当前为固定地址。
-const (
-	sandboxEnvName = "sandbox"
-	// defaultSandboxBaseURL 官方沙盒管理控制台地址（公开非凭据，init 的默认值）
-	defaultSandboxBaseURL = "https://waf-demo.jxwaf.com"
-	// defaultSandboxTestURL 官方沙盒当前固定的测试站点地址（公开非凭据，init 的默认值，
-	// 可用 --test-url / 环境变量 JXWAF_OFFICIAL_TEST_URL 覆盖）
-	defaultSandboxTestURL = "https://waf-demo.jxwaf.com:4443"
-)
+// 官方测试环境：专业版固定共享账号 + 固定设施，所有人共享（测试环境约定：验证流程自动回到空环境）。
+// 官方测试环境使用独立命令组 `jxwaf-cli test`，与自有环境命令彻底分开。
+// 官方测试环境开箱即用：config.json 缺失或为空时 config.Load 自动写入内置默认值
+// （见 config.OfficialTestEnv），无需手动初始化。test init 仅用于配置自定义测试
+// 环境（--base-url / --waf-auth / --test-url 必填，域名组留空自动发现）。
+// test_url 为测试环境的测试站点地址（配置下发到测试环境后访问它验证规则生效），
+// 保存在测试环境定义中（environments.<test>.test_url）。
 
-// resolveSandbox 解析官方沙盒环境。
-// 安全红线：sandbox 命令组固定使用配置中的沙盒环境名，忽略全局 --env，
-// 防止 `sandbox verify --env prod` 之类的误用把清空/删除操作打到自有环境。
-func resolveSandbox() (*adapter.Adapter, *client.Client, string, error) {
+// resolveTest 解析官方测试环境。
+// 安全红线：test 命令组固定使用配置中的测试环境名，忽略全局 --env，
+// 防止 `test verify --env prod` 之类的误用把清空/删除操作打到自有环境。
+func resolveTest() (*adapter.Adapter, *client.Client, string, error) {
 	c, err := config.Load()
 	if err != nil {
 		return nil, nil, "", err
 	}
-	name := c.SandboxName()
+	name := c.TestName()
 	env, ok := c.Environments[name]
 	if !ok {
-		return nil, nil, "", fmt.Errorf("官方沙盒环境 %q 不存在（config.json 未初始化）：请设置环境变量 JXWAF_OFFICIAL_MASTER_AUTH 后运行 jxwaf-cli sandbox init，详见 README 环境前置条件", name)
+		return nil, nil, "", fmt.Errorf("测试环境 %q 不存在（config.json 可能被手工改坏）：可删除 config.json 恢复默认（官方测试环境开箱即用），或运行 jxwaf-cli test init 配置自定义测试环境", name)
 	}
 	a, err := adapter.New(env)
 	if err != nil {
@@ -53,7 +44,7 @@ func resolveSandbox() (*adapter.Adapter, *client.Client, string, error) {
 	return a, client.New(env.BaseURL), name, nil
 }
 
-// createToDeleteVer 创建操作 → 删除操作（sandbox verify 结束自动清理本次配置用），由 gen 类型注册表派生。
+// createToDeleteVer 创建操作 → 删除操作（test verify 结束自动清理本次配置用），由 gen 类型注册表派生。
 var createToDeleteVer = func() map[string]adapter.Op {
 	out := map[string]adapter.Op{}
 	for c, d := range gen.CreateToDelete() {
@@ -68,35 +59,44 @@ func deployNameKey(op adapter.Op) (string, bool) {
 	return k, k != ""
 }
 
-func newSandboxCmd() *cobra.Command {
+func newTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sandbox",
-		Short: "官方测试沙盒（独立命令组，与自有环境命令隔离；忽略 --env）",
+		Use:   "test",
+		Short: "官方测试环境（独立命令组，与自有环境命令隔离；忽略 --env）",
 	}
 	cmd.AddCommand(
-		newSandboxInitCmd(),
-		newSandboxVerifyCmd(),
-		newSandboxResetCmd(),
-		newSandboxCleanupCmd(),
+		newTestInitCmd(),
+		newTestVerifyCmd(),
+		newTestResetCmd(),
+		newTestCleanupCmd(),
 	)
 	return cmd
 }
 
-func newSandboxInitCmd() *cobra.Command {
+func newTestInitCmd() *cobra.Command {
 	var (
+		wafAuth   string
 		baseURL   string
 		envName   string
 		groupName string
 		testURL   string
 	)
 	cmd := &cobra.Command{
-		Use:   "init [--base-url URL] [--name ENV] [--group-name G] [--test-url URL]",
-		Short: "初始化：保存官方沙盒凭据（专业版，不影响自有环境的 active 配置）",
+		Use:   "init --base-url URL --waf-auth AUTH --test-url URL [--name ENV] [--group-name G]",
+		Short: "初始化自定义测试环境（官方测试环境开箱即用，无需初始化）",
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
-			envName = orDefault(envName, sandboxEnvName)
-			masterAuth := os.Getenv("JXWAF_OFFICIAL_MASTER_AUTH")
-			if masterAuth == "" {
-				return nil, fmt.Errorf("缺少官方沙盒凭据：请设置环境变量 JXWAF_OFFICIAL_MASTER_AUTH（凭据不落源码，请向官方获取）")
+			envName = orDefault(envName, config.OfficialTestEnvName)
+			if baseURL == "" {
+				return nil, fmt.Errorf("缺少 --base-url：自定义测试环境的管理控制台地址")
+			}
+			if wafAuth == "" {
+				return nil, fmt.Errorf("缺少 --waf-auth：自定义测试环境的凭据")
+			}
+			if testURL == "" {
+				return nil, fmt.Errorf("缺少 --test-url：自定义测试环境的测试站点地址（配置下发后访问它验证）")
+			}
+			if u, err := url.Parse(testURL); err != nil || u.Host == "" {
+				return nil, fmt.Errorf("--test-url 需为完整地址（含 http/https 与域名）")
 			}
 
 			unlock, err := config.Lock()
@@ -109,26 +109,11 @@ func newSandboxInitCmd() *cobra.Command {
 				return nil, err
 			}
 
-			// 沙盒管理地址取值顺序：--base-url > 环境变量 > 内置官方默认地址
-			baseURL = orDefault(baseURL, os.Getenv("JXWAF_OFFICIAL_BASE_URL"))
-			baseURL = orDefault(baseURL, defaultSandboxBaseURL)
-
-			// 沙盒测试站点地址（配置下发后访问它验证）：--test-url > 环境变量 > 重初始化保留原值 > 官方固定默认
-			if testURL == "" {
-				testURL = os.Getenv("JXWAF_OFFICIAL_TEST_URL")
-			}
-			if testURL == "" {
-				if old, ok := cfg.Environments[envName]; ok && envName == cfg.SandboxName() {
-					testURL = old.TestURL
-				}
-			}
-			testURL = orDefault(testURL, defaultSandboxTestURL)
-
-			// 环境名占用保护：仅允许覆盖沙盒自身（幂等重初始化），拒绝覆盖自有环境
+			// 环境名占用保护：仅允许覆盖测试环境自身（切换自建测试环境），拒绝覆盖自有环境
 			if _, exists := cfg.Environments[envName]; exists {
-				isReinit := envName == cfg.SandboxName()
+				isReinit := envName == cfg.TestName()
 				if !isReinit {
-					return nil, fmt.Errorf("环境名 %q 已被自有环境占用，沙盒初始化不会覆盖它；请换一个 --name", envName)
+					return nil, fmt.Errorf("环境名 %q 已被自有环境占用，测试环境初始化不会覆盖它；请换一个 --name", envName)
 				}
 			}
 
@@ -136,7 +121,7 @@ func newSandboxInitCmd() *cobra.Command {
 			warning := ""
 			if groupName == "" {
 				probe, err := adapter.New(config.Environment{
-					Version: config.VersionProfessional, BaseURL: baseURL, WafAuth: masterAuth,
+					Version: config.VersionProfessional, BaseURL: baseURL, WafAuth: wafAuth,
 				})
 				if err != nil {
 					return nil, err
@@ -149,16 +134,16 @@ func newSandboxInitCmd() *cobra.Command {
 				}
 			}
 
-			// 不修改 Active：沙盒环境与自有环境彻底分离，通用命令默认不会命中沙盒
+			// 不修改 Active：测试环境与自有环境彻底分离，通用命令默认不会命中测试环境
 			cfg.Environments[envName] = config.Environment{
 				Name:      envName,
 				Version:   config.VersionProfessional,
 				BaseURL:   baseURL,
-				WafAuth:   masterAuth,
+				WafAuth:   wafAuth,
 				GroupName: groupName,
 				TestURL:   testURL,
 			}
-			cfg.SandboxEnv = envName
+			cfg.TestEnv = envName
 			if err := config.Save(cfg); err != nil {
 				return nil, err
 			}
@@ -167,14 +152,15 @@ func newSandboxInitCmd() *cobra.Command {
 				"version":    "professional",
 				"group_name": groupName,
 				"test_url":   testURL,
-				"hint":       "官方沙盒已保存（环境名 " + envName + "，测试站点 " + testURL + "）。请使用 sandbox verify/sandbox reset/sandbox cleanup 操作沙盒；自有环境用通用命令。 " + warning,
+				"hint":       "自定义测试环境已保存（环境名 " + envName + "，测试站点 " + testURL + "）。test 命令组（verify/reset/cleanup）将操作该环境；恢复官方测试环境可删除 config.json（自动重建默认）。 " + warning,
 			}, nil
 		}),
 	}
-	cmd.Flags().StringVar(&baseURL, "base-url", "", "沙盒管理控制台地址（默认官方环境）")
-	cmd.Flags().StringVar(&envName, "name", "", "保存的环境名（默认 sandbox）")
+	cmd.Flags().StringVar(&wafAuth, "waf-auth", "", "自定义测试环境凭据（必填）")
+	cmd.Flags().StringVar(&baseURL, "base-url", "", "自定义测试环境管理控制台地址（必填）")
+	cmd.Flags().StringVar(&envName, "name", "", "保存的环境名（默认 test，覆盖官方测试环境即切换）")
 	cmd.Flags().StringVar(&groupName, "group-name", "", "专业版域名组（留空则尝试自动发现）")
-	cmd.Flags().StringVar(&testURL, "test-url", "", "沙盒测试站点地址（配置下发后访问它验证；默认官方固定地址）")
+	cmd.Flags().StringVar(&testURL, "test-url", "", "测试站点地址（必填；配置下发后访问它验证）")
 	return cmd
 }
 
@@ -196,7 +182,7 @@ func discoverGroup(a *adapter.Adapter, c *client.Client) (string, error) {
 	return "", fmt.Errorf("域名组列表响应格式无法解析: %v", raw)
 }
 
-func newSandboxVerifyCmd() *cobra.Command {
+func newTestVerifyCmd() *cobra.Command {
 	var (
 		targetURL string
 		waitSec   int
@@ -205,28 +191,25 @@ func newSandboxVerifyCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "verify <用例文件> [--url 站点]",
-		Short: "沙盒一键验证：清空基线→部署→打流量→查日志→报告→清理（环境回到空态）",
+		Short: "测试环境一键验证：清空基线→部署→打流量→查日志→报告→清理（环境回到空态）",
 		Args:  cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
-			// 解析沙盒环境（固定沙盒环境，忽略 --env）
-			a, c, envName, err := resolveSandbox()
+			// 解析测试环境（固定测试环境，忽略 --env）
+			a, c, envName, err := resolveTest()
 			if err != nil {
 				return nil, err
 			}
 
-			// 测试站点取值顺序：--url > 环境变量 > 沙盒环境配置的 test_url（配置下发到沙盒后访问它验证）
-			if targetURL == "" {
-				targetURL = os.Getenv("JXWAF_OFFICIAL_TEST_URL")
-			}
+			// 测试站点取值顺序：--url > 测试环境配置的 test_url（配置下发到测试环境后访问它验证）
 			if targetURL == "" {
 				if cfg, err := config.Load(); err == nil {
-					if env, ok := cfg.Environments[cfg.SandboxName()]; ok {
+					if env, ok := cfg.Environments[cfg.TestName()]; ok {
 						targetURL = env.TestURL
 					}
 				}
 			}
 			if targetURL == "" {
-				return nil, fmt.Errorf("--url 必填：沙盒测试站点地址（或在 sandbox init 时配置 test_url，或经环境变量 JXWAF_OFFICIAL_TEST_URL 提供）")
+				return nil, fmt.Errorf("--url 必填：测试站点地址（或恢复 config.json 默认配置）")
 			}
 			u, err := url.Parse(targetURL)
 			if err != nil || u.Host == "" {
@@ -338,12 +321,12 @@ func cleanupDeployed(a *adapter.Adapter, c *client.Client, delOp adapter.Op, key
 	return true, nil
 }
 
-func newSandboxResetCmd() *cobra.Command {
+func newTestResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reset [--apply]",
-		Short: "沙盒全量清空（规则/白名单/名单/组件，不删域名；默认 dry-run）",
+		Short: "测试环境全量清空（规则/白名单/名单/组件，不删域名；默认 dry-run）",
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
-			a, c, envName, err := resolveSandbox()
+			a, c, envName, err := resolveTest()
 			if err != nil {
 				return nil, err
 			}
@@ -369,7 +352,7 @@ func newSandboxResetCmd() *cobra.Command {
 			}
 			results, summary, execErr := executePlans(a, c, plans)
 			if execErr != nil {
-				return nil, fmt.Errorf("沙盒清空未全部完成: %w", execErr)
+				return nil, fmt.Errorf("测试环境清空未全部完成: %w", execErr)
 			}
 			return map[string]any{"env": envName, "summary": summary, "results": results}, nil
 		}),
@@ -378,16 +361,16 @@ func newSandboxResetCmd() *cobra.Command {
 	return cmd
 }
 
-func newSandboxCleanupCmd() *cobra.Command {
+func newTestCleanupCmd() *cobra.Command {
 	var (
 		rtype string
 		names string
 	)
 	cmd := &cobra.Command{
 		Use:   "cleanup --type <资源类型> --names a,b [--apply]",
-		Short: "沙盒按名称批量删除配置（默认 dry-run）",
+		Short: "测试环境按名称批量删除配置（默认 dry-run）",
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
-			a, c, envName, err := resolveSandbox()
+			a, c, envName, err := resolveTest()
 			if err != nil {
 				return nil, err
 			}

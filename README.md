@@ -2,18 +2,20 @@
 
 通过 AI Agent 运维 JXWAF：Go 命令行工具 + 文档体系，让 AI 在 IDE（Claude Code / Trae / Cursor 等）中用自然语言完成 WAF 防护配置的生成、验证与下发。
 
-支持 JXWAF 三个版本：**标准版 / 专业版 / 云WAF**。版本差异（认证、端点命名、租户参数）由 CLI 内部适配层自动处理，对使用者与 AI 是统一命令面。
+支持 JXWAF 三个版本：**标准版 / 专业版 / 云WAF**。版本差异由 CLI 内部适配层自动处理，对使用者与 AI 是统一命令面。
 
 ## 环境前置条件（必读）
 
-CLI 按用途区分**测试环境**与**生产环境**两类，`config.json` 是唯一配置来源，**必须在首次使用前初始化**：
+CLI 按用途区分**测试环境**与**生产环境**两类，`config.json` 是唯一配置来源（官方测试环境自动生成，生产环境需手动配置）：
 
 | 环境用途 | 配置方式 | 说明 |
 |---|---|---|
-| **测试环境**（配置下发生产前先验证） | 官方沙盒（推荐）或自建 | 官方沙盒：免费云测试环境，`sandbox init` 即开即用，凭据经 `JXWAF_OFFICIAL_MASTER_AUTH` 环境变量注入（向官方获取）；**不用官方沙盒则需自行搭建一套测试环境**，用 `config set` 配置后以 `--env <名称>` 操作 |
+| **测试环境**（配置下发生产前先验证） | 官方测试环境（开箱即用）或自建（`test init`） | 官方环境由 CLI 内置默认值自动写入（管理地址、共享凭据、域名组、测试站点全部预置），无需任何初始化；**若需改用自建测试环境**，用 `test init` 配置或直接修改 `config.json` |
 | **生产环境**（自有环境，防护正式生效） | `config set` | 标准版/专业版/自建云控制台，需控制台地址与 waf_auth；**需先开启控制台 Admin API（默认关闭）**，见下文 |
 
-环境隔离：`sandbox` 命令组固定只操作官方沙盒（忽略 `--env`）；自建测试环境与生产环境共存于 `config.json`，经 `config use` / `--env` 切换，两类环境可同时配置、互不影响。
+> **测试环境默认由官方提供，开箱即用**：`config.json` 缺失或为空时，CLI 自动写入内置的官方测试环境默认值（管理地址、共享凭据、域名组、测试站点 `test_url` 均为官方预置设施），`test verify` 可直接使用；用户需要自行配置的是**生产环境**（以及选择自建时的测试环境）。删除 `config.json` 即恢复官方默认。
+
+环境隔离：`test` 命令组固定只操作测试环境（默认官方，`test init` 自建后自动切换）；自建测试环境与生产环境共存于 `config.json`。
 
 **生产环境（自有环境）必须先开启 Admin API**：控制台默认关闭 `/admin_api/` 接口（`ADMIN_API_ENABLE: "false"`），CLI 的全部管理命令都依赖它（自建测试环境同样适用）。需修改控制台所在服务器 docker-compose.yml 中 `jxwaf_admin_server` 服务的环境变量并重启容器：
 
@@ -23,27 +25,20 @@ environment:
   ADMIN_API_WHITELIST: "*"   # 白名单：逗号分隔 IP/域名/网段；"*" 或空为全放行
 ```
 
-`ADMIN_API_WHITELIST` 默认 `agent.jxwaf.com`，CLI 所在机器出口 IP 不命中会被拒绝（"ip not allowed"）。办公电脑出口 IP 不固定，一般直接设 `*` 即可（接口本身仍受 waf_auth 认证保护）；生产环境建议收紧为固定 IP/网段。通过 `jxwaf-cli deploy` 部署的环境同样默认关闭，需修改 `/opt/jxwaf_node/docker-compose.yml` 后 `docker compose up -d` 生效。官方沙盒已开启，无需此操作。
+`ADMIN_API_WHITELIST` 是IP白名单列表，CLI 所在机器出口 IP 不命中会被拒绝（"ip not allowed"）。办公电脑出口 IP 不固定，一般直接设 `*` 即可（接口本身仍受 waf_auth 认证保护）；生产环境建议收紧为固定 IP/网段。通过 `jxwaf-cli deploy` 部署的环境同样默认关闭，需修改 `docker-compose.yml` 后 `docker compose up -d` 生效。
 
-未初始化时，除 `config`/`generate` 外的所有操作命令（apply / verify / rule / sandbox verify 等）都会**直接终止并报错**，不会执行任何下发或验证动作。初始化后用 `config show`（凭据脱敏）与 `config validate`（连通性自检）确认就绪。
+自有环境未配置时，除 `config`/`generate`/`test` 外的操作命令（apply / verify / rule 等）都会**直接终止并报错**，不会执行任何下发或验证动作；官方测试环境开箱即用，`test verify` 可直接使用。配置后用 `config show`（凭据脱敏）与 `config validate`（连通性自检）确认就绪。
 
 ## 快速开始
 
+配置文件为**项目目录下的 `config.json`**，与 jxwaf-cli 程序同级。测试站点地址（配置下发到测试环境后访问验证，当前固定 `https://waf-demo.jxwaf.com:4443`）保存在测试环境定义的 `test_url` 字段。
+
+官方测试环境开箱即用：`config.json` 缺失或为空时 CLI 自动写入内置默认（管理地址、共享凭据、域名组、测试站点全部预置），无需任何初始化即可 `test verify`。自建测试环境用 `test init` 覆盖配置（`--base-url` / `--waf-auth` / `--test-url` 必填，域名组留空自动发现）：
+
 ```bash
-# 构建（或下载 Release 二进制）
-go build -o jxwaf-cli ./cmd/cli
-
-# 初始化测试环境（官方沙盒：免费云测试环境，独立命令组，与自有环境隔离）
-# 沙盒凭据经环境变量注入（凭据红线：不落源码/文件），向官方获取
-export JXWAF_OFFICIAL_MASTER_AUTH=<沙盒凭据>
-./jxwaf-cli sandbox init
-
-# 查看配置（凭据脱敏）与连通性
-./jxwaf-cli config show
-./jxwaf-cli config validate
+./jxwaf-cli test init --base-url https://your-test-console \
+  --waf-auth <凭据> --test-url <测试站点>
 ```
-
-配置文件为**项目目录下的 `config.json`**（与 jxwaf-cli 二进制同级，含凭据，已 gitignore 严禁提交）。沙盒测试站点地址（配置下发到沙盒后访问验证，当前固定 `https://waf-demo.jxwaf.com:4443`）保存在沙盒环境定义的 `test_url` 字段，`sandbox init` 自动写入；均可用环境变量或命令行参数覆盖。
 
 生产环境接入（自有环境，标准版/专业版/自建云）：
 
@@ -52,7 +47,7 @@ export JXWAF_OFFICIAL_MASTER_AUTH=<沙盒凭据>
   --base-url https://your-console --waf-auth <token> --group-name <域名组>
 ```
 
-前提：控制台已按上文开启 Admin API（`ADMIN_API_ENABLE: "true"` 且白名单放行，一般设 `*`），可用 `./jxwaf-cli config validate` 自检。不用官方沙盒时，测试环境同样用 `config set` 配置（如 `--name test`），验证时以 `--env test` 指定。
+前提：控制台已按上文开启 Admin API（`ADMIN_API_ENABLE: "true"` 且白名单放行，一般设 `*`），可用 `./jxwaf-cli config validate` 自检。不用官方测试环境时，自建测试环境用 `test init` 配置（test 命令组自动切换到该环境）。
 
 ## 典型闭环
 
@@ -60,13 +55,13 @@ export JXWAF_OFFICIAL_MASTER_AUTH=<沙盒凭据>
 # 1. 生成配置（语义参数 → 规范请求体；拦截类默认 watch 观察）
 ./jxwaf-cli generate web-rule --params /tmp/rule.json --output /tmp/rule_cfg.json
 
-# 2. 官方沙盒一键验证（清空基线→部署→打流量→查日志→报告→清理，环境回到空态）
-./jxwaf-cli sandbox verify /tmp/rule_cfg.json
+# 2. 官方测试环境一键验证（清空基线→部署→打流量→查日志→报告→清理，环境回到空态）
+./jxwaf-cli test verify /tmp/rule_cfg.json
 
-# 3. 沙盒手动清理与查询
-./jxwaf-cli sandbox reset
-./jxwaf-cli rule web list --params '{"page":1}' --env sandbox
-./jxwaf-cli soc log query --params '{"from_time":"...","to_time":"...","page":1,"sql_rules":[...]}' --env sandbox
+# 3. 测试环境手动清理与查询
+./jxwaf-cli test reset
+./jxwaf-cli rule web list --params '{"page":1}' --env test
+./jxwaf-cli soc log query --params '{"from_time":"...","to_time":"...","page":1,"sql_rules":[...]}' --env test
 ```
 
 ## 输出契约
@@ -78,7 +73,6 @@ export JXWAF_OFFICIAL_MASTER_AUTH=<沙盒凭据>
 
 | 文档 | 内容 |
 |---|---|
-| [docs/requirements.md](docs/requirements.md) | 需求基线（范围、架构、安全模型、验收标准） |
 | [docs/cli.md](docs/cli.md) | 完整命令参考 |
 | [docs/rule_dev.md](docs/rule_dev.md) | 规则与白名单开发规范（匹配参数/运算符全集、AND-OR 语义、正则规范） |
 | [docs/module_dev.md](docs/module_dev.md) | 名单 / 组件（LuaJIT、共享字典、unify_action）/ 网站接入规范 |
@@ -108,15 +102,5 @@ jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] --
 ## AI IDE 接入
 
 - [AGENTS.md](AGENTS.md) — Claude Code / Cursor / Copilot 等通用接入说明
-- `.trae/rules/` — Trae 工作规则
 
 多 IDE 通用：仅凭本仓库文档与 CLI，任何 AI IDE 均可完成运维闭环。
-
-## 开发
-
-```bash
-go test ./...   # 单元 + 集成（含完整闭环 E2E 模拟测试）
-go vet ./...
-```
-
-依赖：Go 1.25+、cobra、golang.org/x/term。

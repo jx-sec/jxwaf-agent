@@ -35,7 +35,7 @@ type TestCase struct {
 type typeSpec struct {
 	op      string // 创建操作名
 	gen     func(gtype, op string, cfg, params map[string]any) (*Result, error)
-	cleanOp string // 对应删除操作名（sandbox verify 自动清理用；空表示不自动清理）
+	cleanOp string // 对应删除操作名（test verify 自动清理用；空表示不自动清理）
 	nameKey string // 删除时使用的名称字段
 }
 

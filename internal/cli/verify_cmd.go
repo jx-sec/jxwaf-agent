@@ -68,7 +68,7 @@ func (vf *verifyFile) cases() []map[string]any {
 }
 
 // newVerifyCmd 通用流量验证：只发流量+查日志出报告，不部署不清空。
-// 官方沙盒的一键闭环用 `jxwaf-cli sandbox verify`。
+// 官方测试环境的一键闭环用 `jxwaf-cli test verify`。
 func newVerifyCmd() *cobra.Command {
 	var (
 		targetURL string
@@ -80,7 +80,7 @@ func newVerifyCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
 			if targetURL == "" {
-				return nil, fmt.Errorf("--url 必填：被测站点地址（官方沙盒闭环请用 sandbox verify，默认官方测试域名）")
+				return nil, fmt.Errorf("--url 必填：被测站点地址（官方测试环境闭环请用 test verify，默认官方测试域名）")
 			}
 			u, err := url.Parse(targetURL)
 			if err != nil || u.Host == "" {

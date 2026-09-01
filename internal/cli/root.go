@@ -22,11 +22,11 @@ func newRootCmd() *cobra.Command {
 	// 错误输出由 abort 统一处理（含 JSON 契约），抑制 cobra 原生错误文本。
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-	cmd.PersistentFlags().StringVar(&envFlag, "env", "", "目标环境名称（默认取配置中的 active；sandbox 命令组固定使用沙盒环境）")
+	cmd.PersistentFlags().StringVar(&envFlag, "env", "", "目标环境名称（默认取配置中的 active；test 命令组固定使用测试环境）")
 	cmd.PersistentFlags().StringVar(&groupFlag, "group", "", "专业版域名组（默认取环境配置中的 group_name）")
 	cmd.PersistentFlags().StringVar(&subUserFlag, "sub-user", "", "云WAF主账号操作的目标子账号名")
 	cmd.AddCommand(newConfigCmd())
-	cmd.AddCommand(newSandboxCmd())
+	cmd.AddCommand(newTestCmd())
 	cmd.AddCommand(newGenerateCmd())
 	cmd.AddCommand(newApplyCmd())
 	cmd.AddCommand(newVerifyCmd())

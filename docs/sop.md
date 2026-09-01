@@ -35,14 +35,14 @@
 
 ```
 需求分析 → 信息澄清 → 读 docs 对应规范 → generate 生成（含用例，--output 落盘信封）
-→ 官方沙盒：sandbox verify 一键闭环（清基线→部署→打流量→查日志→报告→清理，环境回到空态）
+→ 官方测试环境：test verify 一键闭环（清基线→部署→打流量→查日志→报告→清理，环境回到空态）
 → 误报/漏报调整（≤3 次迭代，调试用 --no-fresh/--keep）
 → 展示验证报告与最终配置 → 用户确认 → 生产 dry-run → --apply → 结果反馈
 ```
 
-官方沙盒用独立命令组 `sandbox`（verify/cleanup/reset），与自有环境命令隔离；自有环境验证用通用 `verify --url`（只发流量不动配置）。官方兜底每日 `sandbox reset --apply`。
+官方测试环境用独立命令组 `test`（verify/cleanup/reset），与自有环境命令隔离；自有环境验证用通用 `verify --url`（只发流量不动配置）。官方兜底每日 `test reset --apply`。
 
-**最新文档查阅**：本地 `docs/` 是编写时的快照。当本地文档与线上行为有出入、或需要最新信息（部署镜像版本、环境要求、新功能、字段规范）时，到 **docs.jxwaf.com** 查阅官方最新文档（按版本分站：`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/`；部署类看各站 `Deployment-Tutorial`，字段规范以各版 `ADMIN_API_DOCUMENT.md` 为准），以官方为准。
+**文档优先级**：以本地 `docs/` 为主。当本地文档与线上行为有冲突或错误、或拿不准的字段时，再到 **docs.jxwaf.com** 获取最新（按版本分站：`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/`；部署类看各站 `Deployment-Tutorial`，字段规范以各版 `ADMIN_API_DOCUMENT.md` 为准），以官方为准。
 
 ## 异常处理
 

@@ -294,6 +294,6 @@ jxwaf-cli namelist item-del --params '{"name_list_name":"block_malicious_ip","na
 
 ## 案例复用注意
 
-1. 所有拦截类先 `watch` 下发 → `sandbox verify` 验证 → 无误报改 block 再下发生产
+1. 所有拦截类先 `watch` 下发 → `test verify` 验证 → 无误报改 block 再下发生产
 2. 组件案例下发前确认：conf 字段类型（数值 tonumber）、key 前缀已拼项目名、TTL 全覆盖
 3. 阈值类参数（exceed_count / threshold）按业务峰值调整，参考 [playbook.md](playbook.md) PV 限速建议表

@@ -19,9 +19,9 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 		Environments: map[string]Environment{
 			"prod": {Name: "prod", Version: VersionCloud, BaseURL: "https://waf.example.com",
 				WafAuth: "token-12345", SubWafAuth: "sub", CloudMode: ModeUser},
-			"sandbox": {Name: "sandbox", Version: VersionProfessional, BaseURL: "https://waf-demo.jxwaf.com", WafAuth: "demo"},
+			"test": {Name: "test", Version: VersionProfessional, BaseURL: "https://waf-demo.jxwaf.com", WafAuth: "demo"},
 		},
-		SandboxEnv: "sandbox",
+		TestEnv: "test",
 	}
 	if err := Save(c); err != nil {
 		t.Fatal(err)
@@ -30,8 +30,8 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Active != "prod" || got.SandboxEnv != "sandbox" {
-		t.Errorf("active/sandbox_env 丢失: %+v", got)
+	if got.Active != "prod" || got.TestEnv != "test" {
+		t.Errorf("active/test_env 丢失: %+v", got)
 	}
 	if got.Environments["prod"].CloudMode != ModeUser {
 		t.Errorf("cloud_mode 丢失: %+v", got.Environments["prod"])
@@ -73,7 +73,7 @@ func TestSaveAtomicNoLeftoverTemp(t *testing.T) {
 	}
 }
 
-func TestLoadEmptyFileAsEmptyConfig(t *testing.T) {
+func TestLoadEmptyFileSeedsOfficialTest(t *testing.T) {
 	path := newTestPath(t)
 	t.Setenv("JXWAF_CONFIG_PATH", path)
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
@@ -81,10 +81,43 @@ func TestLoadEmptyFileAsEmptyConfig(t *testing.T) {
 	}
 	c, err := Load()
 	if err != nil {
-		t.Fatalf("空文件应视为未初始化: %v", err)
+		t.Fatalf("空文件应种子写入默认配置: %v", err)
 	}
-	if c.Environments == nil || len(c.Environments) != 0 {
-		t.Errorf("空文件应返回空配置: %+v", c)
+	want := OfficialTestEnv()
+	got, ok := c.Environments[OfficialTestEnvName]
+	if !ok || got.WafAuth != want.WafAuth || got.BaseURL != want.BaseURL ||
+		got.GroupName != want.GroupName || got.TestURL != want.TestURL {
+		t.Errorf("空文件应写入官方测试环境默认值: %+v", c.Environments)
+	}
+}
+
+func TestLoadMissingSeedsOfficialTest(t *testing.T) {
+	path := newTestPath(t)
+	t.Setenv("JXWAF_CONFIG_PATH", path)
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("文件缺失应种子写入默认配置: %v", err)
+	}
+	if c.TestName() != OfficialTestEnvName {
+		t.Errorf("默认测试环境名应为 %q: %+v", OfficialTestEnvName, c)
+	}
+	if _, ok := c.Environments[OfficialTestEnvName]; !ok {
+		t.Errorf("默认配置应包含官方测试环境: %+v", c.Environments)
+	}
+	// 种子应落盘（0600），后续 Load 从文件读取
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("种子写入应创建配置文件: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("配置文件权限应为 0600，实际 %v", info.Mode().Perm())
+	}
+	again, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Environments[OfficialTestEnvName].WafAuth != OfficialTestWafAuth {
+		t.Errorf("二次 Load 应从文件读取官方测试环境: %+v", again.Environments)
 	}
 }
 
@@ -118,14 +151,14 @@ func TestResolveNoActiveHint(t *testing.T) {
 	}
 }
 
-func TestSandboxNameDefault(t *testing.T) {
+func TestNameDefault(t *testing.T) {
 	c := &Config{Environments: map[string]Environment{}}
-	if got := c.SandboxName(); got != "sandbox" {
-		t.Errorf("默认沙盒名应为 sandbox，实际 %q", got)
+	if got := c.TestName(); got != "test" {
+		t.Errorf("默认测试环境名应为 test，实际 %q", got)
 	}
-	c.SandboxEnv = "mybox"
-	if got := c.SandboxName(); got != "mybox" {
-		t.Errorf("已配置沙盒名应为 mybox，实际 %q", got)
+	c.TestEnv = "mybox"
+	if got := c.TestName(); got != "mybox" {
+		t.Errorf("已配置测试环境名应为 mybox，实际 %q", got)
 	}
 }
 
@@ -182,8 +215,8 @@ func TestLoadTestURL(t *testing.T) {
 	t.Setenv("JXWAF_CONFIG_PATH", newTestPath(t))
 	c := &Config{
 		Environments: map[string]Environment{
-			"sandbox": {
-				Name: "sandbox", Version: VersionProfessional,
+			"test": {
+				Name: "test", Version: VersionProfessional,
 				BaseURL: "https://waf-demo.jxwaf.com", WafAuth: "t",
 				TestURL: "https://waf-demo.jxwaf.com:4443",
 			},
@@ -196,8 +229,8 @@ func TestLoadTestURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// test_url 是沙盒环境属性（配置下发到沙盒后访问它验证），不是全局字段
-	if got.Environments["sandbox"].TestURL != c.Environments["sandbox"].TestURL {
-		t.Errorf("环境 test_url 往返丢失: %+v", got.Environments["sandbox"])
+	// test_url 是测试环境属性（配置下发到测试环境后访问它验证），不是全局字段
+	if got.Environments["test"].TestURL != c.Environments["test"].TestURL {
+		t.Errorf("环境 test_url 往返丢失: %+v", got.Environments["test"])
 	}
 }

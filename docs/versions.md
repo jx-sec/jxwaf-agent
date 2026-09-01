@@ -27,7 +27,7 @@ jxwaf-cli 对接 JXWAF 标准版 / 专业版 / 云WAF。**版本差异由 CLI ad
 ### 专业版
 - `config set --version professional --group-name <默认组>`；每命令可用 `--group` 覆盖
 - 所有防护类操作必须指定域名组；域名/组件/名单为全局
-- **官方测试沙盒（`sandbox` 命令组默认目标）**：固定共享账号（`waf-demo.jxwaf.com`），`sandbox init` 自动发现域名组；所有人共用，验证后自动回到空环境
+- **官方测试环境（`test` 命令组默认目标）**：固定共享账号（`waf-demo.jxwaf.com`），`test init` 自动发现域名组；所有人共用，验证后自动回到空环境
 
 ### 云WAF
 - 自建云主账号（admin 模式）：`config set` 只配 `waf_auth` + `--sub-user-name`；防护操作自动注入子账号名，组件/名单/网站接入全功能
@@ -77,4 +77,4 @@ jxwaf-cli 对接 JXWAF 标准版 / 专业版 / 云WAF。**版本差异由 CLI ad
 | 死路由 | edit_soc_network_block_ip / get_soc_network_block_ip | 服务端 access.lua 注册但函数未实现（请求被静默吞掉）；用 edit/get_soc_network_ip 替代 |
 | /user 段独有模块 | dns_config 5 个、account_info/edit_password 等 | 子账号自助管理（Cloud user 专属控制台功能），非 Admin API 范畴 |
 
-字段级规范以 jxwaf_admin_server 仓库各版 `ADMIN_API_DOCUMENT.md` / `USER_API_DOCUMENT.md` 为准；产品语义以 docs.jxwaf.com 各版本产品文档为准。CLI 内部端点映射以各版 `access.lua` 路由表为准。
+以本地 `docs/` 为主；与实际行为冲突或拿不准时，字段级规范以 jxwaf_admin_server 仓库各版 `ADMIN_API_DOCUMENT.md` / `USER_API_DOCUMENT.md` 为准，产品语义以 docs.jxwaf.com 各版本产品文档为准。CLI 内部端点映射以各版 `access.lua` 路由表为准。

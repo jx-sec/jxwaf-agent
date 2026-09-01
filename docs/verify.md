@@ -14,15 +14,15 @@
 ## 执行
 
 ```bash
-# 一键闭环（官方沙盒专用命令组，与自有环境隔离）：
+# 一键闭环（官方测试环境专用命令组，与自有环境隔离）：
 # 清空基线 → 部署 → 打流量 → 查日志 → 报告 → 清理本次配置（环境回到空态）
 jxwaf-cli generate web-rule --params /tmp/rule.json --output /tmp/rule_cfg.json
-jxwaf-cli sandbox verify /tmp/rule_cfg.json [--url https://test.example.com] [--wait 5]
+jxwaf-cli test verify /tmp/rule_cfg.json [--url https://test.example.com] [--wait 5]
 ```
 
-官方沙盒验证（`sandbox verify`）自动完成全流程，结束时环境回到空态。自有环境（标准版/专业版/自建云）使用通用 `verify --url`，只发流量出报告，**不会部署或清空任何配置**；需要分批手动时用 `apply` 下发 → `verify --no-fresh`…（注：通用 verify 无 --no-fresh/--keep 参数，手动流程为 `apply --apply` → `verify` → `cleanup --apply`）。
+官方测试环境验证（`test verify`）自动完成全流程，结束时环境回到空态。自有环境（标准版/专业版/自建云）使用通用 `verify --url`，只发流量出报告，**不会部署或清空任何配置**；需要分批手动时用 `apply` 下发 → `verify --no-fresh`…（注：通用 verify 无 --no-fresh/--keep 参数，手动流程为 `apply --apply` → `verify` → `cleanup --apply`）。
 
-调试开关（仅 sandbox verify）：
+调试开关（仅 test verify）：
 
 - `--no-fresh`：不清空基线，连续调试同一份配置时使用
 - `--keep`：验证后保留本次部署的配置（如需后续手工检查）

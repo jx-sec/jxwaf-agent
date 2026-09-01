@@ -39,7 +39,7 @@ func newConfigShowCmd() *cobra.Command {
 			}
 			out := map[string]any{
 				"active":       c.Active,
-				"sandbox_env":  c.SandboxName(),
+				"test_env":  c.TestName(),
 				"environments": masked,
 			}
 			return out, nil

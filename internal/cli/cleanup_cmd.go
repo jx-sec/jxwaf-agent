@@ -26,7 +26,7 @@ var cleanupResources = map[string]cleanupResource{
 	"website":    {"domain", adapter.OpDomainDelete},
 }
 
-// runCleanup 按类型与名称批量删除配置（dry-run 预览或执行），供通用命令与云端沙盒命令复用。
+// runCleanup 按类型与名称批量删除配置（dry-run 预览或执行），供通用命令与云端测试环境命令复用。
 func runCleanup(a *adapter.Adapter, c *client.Client, rtype, names string, apply bool) (any, error) {
 	res, ok := cleanupResources[rtype]
 	if !ok {

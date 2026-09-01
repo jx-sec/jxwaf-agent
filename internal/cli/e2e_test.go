@@ -101,6 +101,41 @@ func TestE2EClosedLoop(t *testing.T) {
 	}
 }
 
+// TestTestInitCustomEnv 验证自定义测试环境初始化：必填参数校验 + 显式域名组配置落盘。
+func TestTestInitCustomEnv(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("JXWAF_CONFIG_PATH", filepath.Join(tmp, "config.json"))
+
+	// 1. 必填参数校验：--base-url / --waf-auth / --test-url 缺一不可
+	root := newRootCmd()
+	root.SetArgs([]string{"test", "init"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("缺少必填参数应报错")
+	}
+
+	// 2. 配置自定义测试环境（显式 --group-name，跳过在线发现）
+	out := runCmd(t, nil, "test", "init",
+		"--base-url", "http://console.example.com",
+		"--waf-auth", "custom-token",
+		"--test-url", "http://site.example.com",
+		"--group-name", "g1")
+	if !strings.Contains(out, "site.example.com") {
+		t.Fatalf("test init 输出异常: %s", out)
+	}
+
+	// 3. 落盘确认：test 命令组目标切换为自定义环境
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, ok := cfg.Environments[cfg.TestName()]
+	if !ok || env.BaseURL != "http://console.example.com" ||
+		env.WafAuth != "custom-token" || env.TestURL != "http://site.example.com" ||
+		env.GroupName != "g1" {
+		t.Fatalf("自定义测试环境落盘异常: %+v", cfg.Environments)
+	}
+}
+
 // runCmd 执行 CLI 命令（进程内），返回 stdout；失败时输出 stderr 并终止测试。
 func runCmd(t *testing.T, env []string, args ...string) string {
 	t.Helper()

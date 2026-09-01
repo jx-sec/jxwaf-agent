@@ -55,8 +55,44 @@ func (e Environment) ValidMode() bool {
 // Config 本地配置（项目目录 config.json，权限 0600）。
 type Config struct {
 	Active       string                 `json:"active"`
-	SandboxEnv   string                 `json:"sandbox_env,omitempty"` // 官方沙盒环境名（sandbox 命令组专用）
+	TestEnv   string                 `json:"test_env,omitempty"` // 官方测试环境名（test 命令组专用）
 	Environments map[string]Environment `json:"environments"`
+}
+
+// 官方测试环境内置默认值（开箱即用）：专业版固定共享账号 + 官方预置设施。
+// config.json 缺失或为空时自动写入，无需手动初始化；waf_auth 为官方共享测试
+// 账号的固定凭据（非用户私密凭据，与 base_url / test_url 同为公开常量）。
+const (
+	// OfficialTestEnvName 官方测试环境名（test 命令组默认操作目标）
+	OfficialTestEnvName = "test"
+	// OfficialTestBaseURL 官方测试环境管理控制台地址（公开非凭据）
+	OfficialTestBaseURL = "https://waf-demo.jxwaf.com"
+	// OfficialTestSiteURL 官方测试环境固定测试站点地址（公开非凭据）
+	OfficialTestSiteURL = "https://waf-demo.jxwaf.com:4443"
+	// OfficialTestWafAuth 官方共享测试账号的固定凭据（开箱即用默认值）
+	OfficialTestWafAuth = "6e61ff97-1ba8-4828-bc07-b7b4eeb2d4bd"
+	// OfficialTestGroupName 官方预置域名组
+	OfficialTestGroupName = "test"
+)
+
+// OfficialTestEnv 返回官方测试环境定义（固定值）。
+func OfficialTestEnv() Environment {
+	return Environment{
+		Name:      OfficialTestEnvName,
+		Version:   VersionProfessional,
+		BaseURL:   OfficialTestBaseURL,
+		WafAuth:   OfficialTestWafAuth,
+		GroupName: OfficialTestGroupName,
+		TestURL:   OfficialTestSiteURL,
+	}
+}
+
+// DefaultConfig 返回默认配置：仅含官方测试环境（开箱即用）。
+func DefaultConfig() *Config {
+	return &Config{
+		TestEnv:      OfficialTestEnvName,
+		Environments: map[string]Environment{OfficialTestEnvName: OfficialTestEnv()},
+	}
 }
 
 // LocalConfigName 配置文件名（与 jxwaf-cli 二进制同目录）。
@@ -118,21 +154,20 @@ func Lock() (func(), error) {
 	}, nil
 }
 
-// Load 读取配置；文件不存在或为空时返回空配置（Lock 可能预创建空文件）。
+// Load 读取配置；文件不存在或为空时写入默认配置（官方测试环境开箱即用，无需手动 init）。
 func Load() (*Config, error) {
 	path, err := Path()
 	if err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &Config{Environments: map[string]Environment{}}, nil
-		}
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	if len(data) == 0 {
-		return &Config{Environments: map[string]Environment{}}, nil
+		c := DefaultConfig()
+		_ = Save(c) // 种子写入失败不影响本次使用（下次 Load 重试）
+		return c, nil
 	}
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -192,7 +227,7 @@ func (c *Config) Resolve(envFlag string) (Environment, error) {
 		name = c.Active
 	}
 	if name == "" {
-		return Environment{}, errors.New("环境未初始化：请先配置 config.json（自有环境运行 jxwaf-cli config set，官方沙盒运行 jxwaf-cli sandbox init），并用 config validate 确认就绪")
+		return Environment{}, errors.New("环境未初始化：请先运行 jxwaf-cli config set 配置自有环境（官方测试环境开箱即用，直接用 test 命令组操作），并用 config validate 确认就绪")
 	}
 	e, ok := c.Environments[name]
 	if !ok {
@@ -201,12 +236,12 @@ func (c *Config) Resolve(envFlag string) (Environment, error) {
 	return e, nil
 }
 
-// SandboxName 返回官方沙盒环境名（未初始化时为默认名 sandbox）。
-func (c *Config) SandboxName() string {
-	if c.SandboxEnv == "" {
-		return "sandbox"
+// TestName 返回官方测试环境名（未初始化时为默认名 test）。
+func (c *Config) TestName() string {
+	if c.TestEnv == "" {
+		return "test"
 	}
-	return c.SandboxEnv
+	return c.TestEnv
 }
 
 // Names 返回已排序的环境名列表。
