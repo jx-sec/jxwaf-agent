@@ -1,6 +1,6 @@
 # 运维 Playbook（误报/漏报排查与调优）
 
-> 配置下发后的排查调优手册。验证执行流程见 [verify.md](verify.md)，字段规范见 [rule_dev.md](rule_dev.md) / [module_dev.md](module_dev.md)。
+> 配置下发后的排查调优手册。验证执行流程见 [verify.md](verify.md)，字段规范见 [rule_dev.md](rule_dev.md) / [module_dev.md](module_dev.md)，组件开发与排查见 [component_dev.md](component_dev.md)。
 
 ## 误报处理
 
@@ -142,7 +142,7 @@ waf_module=web_engine_protection
 排查顺序（对齐引擎源码 `decode_base64 → loadstring → 执行返回 table` 链路）：
 
 1. code 是否 base64 编码（`generate` 已自动处理；手拼 API 时易漏）
-2. Lua 5.2+ 语法（完整对照表见 module_dev.md：`& | ~ >> << // goto` 等）
+2. Lua 5.2+ 语法（完整对照表见 component_dev.md：`& | ~ >> << // goto` 等）
 3. 括号/引号匹配、loadstring 语法错误
 4. 组件必须 `return _M` 且含 `check` 函数（loadstring 执行后返回 table 才会被注册）
 
@@ -184,4 +184,4 @@ waf_module=web_engine_protection
 
 - 配置同步间隔 3 秒（下发后等约 3-5 秒再验证）
 - 节点心跳异常阈值 10 分钟
-- 自定义组件叠加会进一步损耗（组件每请求执行，遵守 module_dev.md 性能红线）
+- 自定义组件叠加会进一步损耗（组件每请求执行，遵守 [component_dev.md](component_dev.md) 性能红线）

@@ -84,7 +84,7 @@ JSON 字符串，数组元素结构：
 | `raw_header_no_referer` | 同上但移除 referer 头（溯源检测场景） |
 | `request_uri` | `ngx.var.request_uri`（含 query string 的完整 URI） |
 | `host` / `user_agent` / `referer` / `cookie` | 对应请求头（cookie 为原始字符串） |
-| `high_risk_header` | 仅 11 个高风险头的 JSON 编码：user-agent / x-forwarded-for / forwarded / cookie / referer / content-type / accept-language / authorization / x-real-ip / client-ip / true-client-ip |
+| `high_risk_header` | 11 个高风险头键值对，返回 **table**（仅供组件内遍历，不当字符串用于规则匹配） |
 
 ### args_prepocess（数组按顺序执行，前一个输出是后一个输入）
 
@@ -131,9 +131,11 @@ JSON 字符串，**扁平 `[{key, value}]` 数组**（引擎逐项取值后**无
 ```
 
 - key 取值同 match_args（`http_args` 固定枚举 / `header_args` 头名 / `string` 常量等）；`string` 常量用于全站维度统计
+- **取值类型约束**：各项取值仅接受 string（多值参数 table 取第一个元素）；任一项为 nil 或其他类型则本请求跳过统计
 - 统计键结构：`"flow_rule_stat" + 各字段取值拼接`，存共享字典 `jxwaf_inner`，TTL=stat_time
 - 处罚键结构：`"flow_rule_block" + src_ip`，TTL=block_time
 - `exceed_count` 为**严格大于**（100 表示第 101 次请求触发）
+- **触发时机**：超过阈值的当次请求仅写入处罚缓存（`network_block` 例外，立即执行并返回 444）；`block` / `bot_check` / `reject_response` 在处罚期内的**后续请求**生效——测试观测拦截需 exceed_count + 2 条请求（第 exceed_count+1 条写入处罚，下一条被拦截）
 - `filter="false"` 时对所有请求统计；`"true"` 时仅统计命中 rule_matchs 的请求
 
 ## 动作行为详解
@@ -143,7 +145,7 @@ JSON 字符串，**扁平 `[{key, value}]` 数组**（引擎逐项取值后**无
 | `block` | 设置 request_uuid 响应头，返回拦截页（默认 403，控制台可自定义） |
 | `reject_response` | 流量规则/名单：`ngx.exit(444)` 直接关闭连接无响应；**Web 规则：与 block 一致（拦截页）** |
 | `watch` | 仅记录日志不拦截 |
-| `bot_check` | 人机识别（auto=无交互/slipper=滑块/puzzle=拼图/words=选字），通过后设 Cookie 86400 秒 |
+| `bot_check` | 人机识别（auto=无交互/slipper=滑块/puzzle=拼图/words=选字），通过后设 Cookie `jxwaf_bot_check`（86400 秒，绑定 UA+SSL 指纹） |
 | `network_block` | 网络层封禁 IP（POST 控制台 /network_block + 本地字典缓存），返回 444 |
 | `web_bypass` / `flow_bypass` / `all_bypass` | 置跳过标志，跳过对应侧防护（名单/白名单动作） |
 
@@ -222,7 +224,7 @@ access_init → base_component(组件) → global_name_list(名单) → domain_c
   "config": {
     "rule_name": "flow_rate_limit",
     "rule_detail": "每IP限速",
-    "rule_matchs": [{"match_args": [{"key": "http_args", "value": "method"}], "args_prepocess": ["none"], "match_operator": "eq", "match_value": "1"}],
+    "rule_matchs": [{"match_args": [{"key": "http_args", "value": "path"}], "args_prepocess": ["none"], "match_operator": "str_prefix", "match_value": "/"}],
     "rule_action": "block",
     "action_value": "",
     "filter": "false",
@@ -237,6 +239,8 @@ access_init → base_component(组件) → global_name_list(名单) → domain_c
   ]
 }
 ```
+
+`filter="false"` 表示对所有请求统计，`rule_matchs` 不评估（示例保留「路径以 / 开头」占位条件，切回 `filter="true"` 时即变全路径限速）。验证注意：`block` 拦截在超阈值后的**下一请求**才生效，攻击用例需在 `test_cases` 中重复 `exceed_count + 2` 次（或验证时临时调低阈值，如 3 配 5 条），见 [verify.md](verify.md)。
 
 ### Web 白名单（命中即放行 Web 防护）
 

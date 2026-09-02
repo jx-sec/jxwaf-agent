@@ -1,6 +1,6 @@
 # 测试环境验证
 
-验证闭环：部署配置 → 打测试流量 → 查 SOC 日志 → 出报告 → 判断误报/漏报 → 调整或放行。
+验证闭环：部署配置 → 打测试流量 → 查 SOC 日志 → 出测试结果 → 判断误报/漏报 → 调整或放行。
 
 ## 用例设计
 
@@ -20,7 +20,7 @@ jxwaf-cli generate web-rule --params /tmp/rule.json --output /tmp/rule_cfg.json
 jxwaf-cli test verify /tmp/rule_cfg.json [--url https://test.example.com] [--wait 5]
 ```
 
-官方测试环境验证（`test verify`）自动完成全流程，结束时环境回到空态。自有环境（标准版/专业版/自建云）使用通用 `verify --url`，只发流量出报告，**不会部署或清空任何配置**；需要分批手动时用 `apply` 下发 → `verify --no-fresh`…（注：通用 verify 无 --no-fresh/--keep 参数，手动流程为 `apply --apply` → `verify` → `cleanup --apply`）。
+官方测试环境验证（`test verify`）自动完成全流程，结束时环境回到空态。自有环境（标准版/专业版/自建云）使用通用 `verify --url`，只发流量出报告，**不会部署或清空任何配置**；通用 verify 无 --no-fresh/--keep 参数，需要分批手动时按 `apply --apply`（下发）→ `verify`（验证）→ `cleanup --apply`（清理）分开执行。
 
 调试开关（仅 test verify）：
 
@@ -55,6 +55,7 @@ jxwaf-cli soc log query --params '{"from_time":"...","to_time":"...","page":1,"s
 - 时间格式 `YYYY-MM-DD HH:MM:SS`，pageSize 固定 20，注意分页
 - 常用过滤：`host` equals 域名、`waf_action` equals `block/watch`、`src_ip` equals 攻击源
 - 关键字段：`waf_module`（命中模块）、`waf_policy`（命中规则名）、`waf_action`（实际动作）、`waf_extra`（细节）
+- 全量拉取与字段投影用 `soc log fetch`（自动翻页、相对时间 `last`），分析配方见 [analysis.md](analysis.md)
 
 ### waf_module 对照（定位拦截/放行来源）
 
@@ -83,7 +84,7 @@ jxwaf-cli soc log query --params '{"from_time":"...","to_time":"...","page":1,"s
 ## 用例设计分模块要点
 
 - **Web 规则**：攻击载荷放 path/headers/body；正常用例同路径相似参数（暴露误报）；补编码变体（URL/Unicode/Hex）与大小写变体
-- **流量规则**：每条用例仅发送 1 次请求，触发限速需把攻击用例在 `test_cases` 数组中**重复多次**（重复条数 > exceed_count，或验证时临时调低阈值如 exceed_count=3 配 4 条重复用例）；正常用例低频
+- **流量规则**：每条用例仅发送 1 次请求，触发限速需把攻击用例在 `test_cases` 数组中**重复多次**——`block`/`bot_check`/`reject_response` 动作需 **exceed_count + 2 条**（第 exceed_count+1 条写入处罚缓存，下一条才被拦截；见 rule_dev.md 触发时机），`network_block` 动作 exceed_count + 1 条即可（触发当次立即 444）；或验证时临时调低阈值如 exceed_count=3 配 5 条重复用例；正常用例低频
 - **组件**：攻击用例带触发特征；组件设 ctx 变量由规则处置时，同时验证规则引用是否生效
 - **名单**：条目内特征请求应 block，条目外应 pass；临时名单验证过期自动放行
 

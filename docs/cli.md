@@ -88,7 +88,7 @@ jxwaf-cli generate web-rule --params /tmp/p.json [--output /tmp/cfg.json]
 - `--output`：落盘信封 `{type, op, config, test_cases}`（供 `apply`/`verify` 使用）
 - 未指定 `rule_action` 时默认 `watch`（观察优先红线）
 
-字段与校验规范见 [rule_dev.md](rule_dev.md)、[module_dev.md](module_dev.md)。
+字段与校验规范见 [rule_dev.md](rule_dev.md)、[module_dev.md](module_dev.md)、[component_dev.md](component_dev.md)。
 
 ## 下发
 
@@ -129,9 +129,10 @@ jxwaf-cli soc model delete|result|white-add|white-del --params '{...}' [--apply]
 
 - `--params` 即 API 请求体（JSON 文件/`-`/内联），租户参数自动注入，无需手写
 - **默认 dry-run**，`--apply` 才落地；删除类操作务必先 dry-run 展示影响
-- `load` 导入的 `rules` 数组来自配对 `backup` 命令的输出，用于配置迁移
+- `load` 导入的 `rules` 数组来自配对 `backup` 命令的输出，用于配置迁移。**load 语义：仅当 rule_name（名单 `name_list_name` / 组件 `name`）不存在时插入，已存在则跳过（不覆盖）**——迁移前先删除同名配置，或改用 `edit` 更新
+- `backup` 导出仅含业务字段（不含 `status`、`rule_order_time`），导出结果可直接再用于 `load` 导入
 - `priority` 调整优先级：`{"rule_name":"x","type":"top"}`（置顶）或 `{"rule_name":"x","type":"exchange","exchange_rule_name":"y"}`（互换）
-- `hub-load`/`hub-export` 对接 Hub 配置中心（hub.jxwaf.com）：`{"hub_repo":"...","force_load":"true|false"}`，可选 `api_key`
+- `hub-load`/`hub-export` 对接 Hub 配置中心（hub.jxwaf.com）：`{"hub_repo":"...","force_load":"true|false"}`，可选 `api_key`。**hub-load 为覆盖式**（先删后插），`force_load="false"` 时同名已存在会报错——与本地 `load` 的"跳过已存在"语义不同
 
 ## 查询
 
@@ -147,7 +148,8 @@ jxwaf-cli namelist list|get|item-list|item-search|backup --params '{...}'
 jxwaf-cli component list|get|backup --params '{...}'
 jxwaf-cli website list|search|get --params '{...}'
 jxwaf-cli website access list|get|cname-ips|quota --params '{...}'      # 仅云WAF
-jxwaf-cli soc log query --params '{...}'                                # 攻击日志
+jxwaf-cli soc log query --params '{...}'                                # 攻击日志（单页 20 条）
+jxwaf-cli soc log fetch --params '{...}'                                # 攻击日志全量拉取（自动翻页）
 jxwaf-cli soc event list|track --params '{...}'                         # 攻击事件/行为轨迹
 jxwaf-cli soc stats web|flow count-total|api-count|ip-count|country-count|geoip|trend|api-top|type-top|ip-top|country-top --params '{...}'
 jxwaf-cli soc model list|white-list --params '{...}'                    # AI 模型
@@ -167,9 +169,10 @@ jxwaf-cli monitor list --params '{...}'
 - 单条查询：规则/白名单/防篡改 `{"rule_name": "x"}`；名单 `{"name_list_name": "x"}`；组件 `{"name": "x"}`；域名 `{"domain": "x"}`；证书 `{"ssl_domain": "x"}`；域名组 `{"group_name": "x"}`；子账号 `{"sub_user_name": "x"}`；封禁 IP `{"ip": "x"}`（云WAF admin 域名操作另需 `--sub-user`）
 - 搜索：域名 `{"page":1,"search_domain":"x"}`；证书/域名组/子账号 `{"page":1,"search":"x"}`；封禁 IP `{"page":1,"search_ip":"x"}`；名单条目 `{"page":1,"name_list_name":"x","search_value":"y"}`
 - SOC 统计/事件/用量：`{"from_time":"2026-08-30 00:00:00","to_time":"2026-08-30 10:00:00"}`（必填），可选 `domain`（支持 `*.` 前缀通配）；攻击事件加 `page`；行为轨迹加 `attack_ip`
+- 攻击日志全量拉取（soc log fetch）：`{"last":"24h"}` 或 `{"from_time":"...","to_time":"..."}`（二选一），可选 `sql_rules`（条件过滤）、`fields`（输出字段投影，31 字段白名单）、`max_records`（默认 1000，上限 10000）；返回 `{total_count, fetched, truncated, pages_queried, records}`。用法示例与分析配方见 [analysis.md](analysis.md)
 - 配置导出（backup）：规则/白名单/防篡改 `{"rule_name_list": ["x"]}`；名单 `{"name_list_name_list": ["x"]}`；组件 `{"name_list": ["x"]}`
 - 网络封禁：`create {"ip":"1.2.3.4","status":"1","expire_time":3600}`（status 1=封禁 2=解封，expire_time 秒）
-- 攻击日志：`{"from_time":"2026-08-30 10:00:00","to_time":"2026-08-30 11:00:00","page":1,"sql_rules":[{"field":"host","operation":"equals","value":"www.example.com"}]}`；sql_rules.field 白名单：`host, uri, request_uri, method, query_string, src_ip, user_agent, cookie, status, waf_module, waf_policy, waf_action, ...`；operation: `contains/prefix/suffix/equals/not_equals`
+- 攻击日志：`{"from_time":"2026-08-30 10:00:00","to_time":"2026-08-30 11:00:00","page":1,"sql_rules":[{"field":"host","operation":"equals","value":"www.example.com"}]}`；sql_rules.field 可查字段（对齐 jxlog ClickHouse 表结构）：`host, group_name, request_uuid, waf_node_uuid, upstream_addr, upstream_response_time, upstream_status, status, process_time, request_time, raw_headers, scheme, version, uri, request_uri, method, query_string, raw_body, src_ip, user_agent, cookie, raw_resp_headers, raw_resp_body, iso_code, waf_module, waf_policy, waf_action, waf_extra, jxwaf_devid, raw_src_ip, jxwaf_ssl_fingerprint`；operation: `contains/prefix/suffix/equals/not_equals`
 
 ## 测试环境验证闭环
 
@@ -183,7 +186,7 @@ jxwaf-cli test reset [--apply]
 
 - `test verify` 为**一键闭环**：清空基线 → 部署信封配置 → 打测试流量 → 查 SOC 日志 → 报告 → 清理本次配置（环境回到空态）。判定：`expect=block` 且状态码 403/444 → `blocked`；`expect=pass` 且非 403/444 → `passed`；否则 `unexpected`。watch 类规则返回 200，需结合 `soc_logs` 中 `waf_action` 判读（见 [verify.md](verify.md)）
   - `--no-fresh`：不清基线（连续调试）；`--keep`：验证后保留配置
-  - `--url` 省略时取测试站点地址（配置下发到测试环境后访问它验证，当前固定为 `https://waf-demo.jxwaf.com:4443`）：取值顺序 `--url` > 环境变量 `JXWAF_OFFICIAL_TEST_URL` > 测试环境配置的 `test_url`
+  - `--url` 省略时取测试站点地址（配置下发到测试环境后访问它验证，当前固定为 `https://waf-demo.jxwaf.com:4443`）：取值顺序 `--url` > 测试环境配置的 `test_url`
 - `test cleanup`：按名称批量删除测试环境中的配置，默认 dry-run，`--apply` 执行（**删除不可恢复**）
 - `test reset`：测试环境全量清空规则/白名单/名单/组件（**不删域名**），默认 dry-run；官方兜底"每日空环境"可挂定时 `jxwaf-cli test reset --apply`
 
@@ -224,6 +227,7 @@ jxwaf-cli deploy --host <服务器IP> --user root \
 - **两步审核**：默认 dry-run，执行只读前置检查并展示部署计划与完整 compose 内容；`--apply` 才实际变更
 - **端口冲突**：host 网络直占端口（standard 全栈还检查控制台 8000/MySQL 3306/日志 12997），被占时列出占用进程并终止
 - **凭据安全**：SSH 密码仅经环境变量传入不落盘；standard 版 MySQL 密码自动随机生成；远端 compose（含凭据）权限 0600；缺任何必填参数时报错并注明获取方式
+- **控制台无默认账号密码**：JXWAF 控制台不存在任何预置账号（admin / jxwaf_admin 等均不存在），首次使用必须注册账号，再从「系统管理 → 基础信息」获取 waf_auth；禁止编造默认凭据
 - **部署后**：professional/cloud 节点凭 waf_auth 心跳自动注册（控制台"运营中心 → 节点状态"确认上线）；standard 访问 `http://<服务器IP>:8000` 注册账号即可使用
 
 ### `jxwaf-cli deploy admin`（管理控制台，prof/cloud 从零搭建用）
@@ -276,4 +280,4 @@ jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] [-
 → 误报/漏报则改参数重试(≤3次) → cleanup 清理 → 用户确认 → 生产 --apply
 ```
 
-安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)。
+安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)；日志分析与报表配方见 [analysis.md](analysis.md)。

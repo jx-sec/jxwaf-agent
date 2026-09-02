@@ -31,6 +31,16 @@
 5. **凭据安全**：`config show` 已脱敏；严禁将明文 waf_auth 写入对话回复或任何文件
 6. **拒绝违规需求**：用户需求违反红线时拒绝并解释原因
 
+## 模块选择决策树
+
+| 需求特征 | 选用模块 | 说明 |
+|---|---|---|
+| 基于频率统计的防护（限速/CC） | `flow-rule` | 时间窗口计数，超阈值处罚（见 rule_dev.md entity 结构） |
+| 自定义检测逻辑（正则无法覆盖） | `component` | 可独立执行动作（unify_action），或设 `ngx.ctx` 变量由规则 `ctx_args` 引用联动处置 |
+| IP/域名/UA 等键值黑白名单 | `name-list` | 直接封禁/放行用 block/bypass 动作；需规则决定处置则 action=watch + 规则引用 `global_name_list_result` |
+| 单次请求特征匹配拦截 | `web-rule` | 即时匹配，不支持频率统计 |
+| 放行特定流量 | `web-white` / `flow-white` | 命中即跳过对应侧防护 |
+
 ## 标准工作流（SOP）
 
 ```
@@ -49,7 +59,7 @@
 | 现象 | 处置 |
 |---|---|
 | 网络错误/超时 | `config validate` 检查连通性；检查 base_url |
-| `waf_auth fail` / `invalid jxwaf_waf_auth` | 凭据无效：`config show` 核对，重跑 `init` 或 `config set` |
+| `waf_auth fail` / `invalid jxwaf_waf_auth` | 凭据无效：`config show` 核对，重跑 `config set`（自建测试环境用 `test init`） |
 | `ip not allowed` | 调用方 IP 不在管理 API 白名单（联系环境管理员加白） |
 | `param is null` / 参数错误 | 核对 params 字段（cli.md / rule_dev.md / module_dev.md），修正重试 |
 | `rule_name is exist` 等重名 | 改 `--update`（apply）或换名；判定为已存在配置时先查询再决策 |

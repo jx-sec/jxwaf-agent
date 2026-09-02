@@ -1,6 +1,6 @@
 # 实战防护方案库（已验证模式）
 
-> 可直接复用的配置模式。所有 JSON 为 `generate --params` 入参格式，拦截类按红线默认 watch，验证无误报后改 block。字段规范见 [rule_dev.md](rule_dev.md) / [module_dev.md](module_dev.md)。
+> 可直接复用的配置模式。所有 JSON 为 `generate --params` 入参格式，拦截类按红线默认 watch，验证无误报后改 block。字段规范见 [rule_dev.md](rule_dev.md) / [module_dev.md](module_dev.md)，组件红线见 [component_dev.md](component_dev.md)。
 
 ## 1. Log4j JNDI 注入（CVE-2021-44228，4 条规则分层防御）
 
@@ -59,7 +59,7 @@ match_value: 同规则 1
 
 **检测逻辑**：每接口 × 每 IP 固定窗口计数 → 单 IP 超阈值记为高频 → 接口高频 IP 数超阈值判定 CC → 接口级开启人机识别持续 protect_time。
 
-**组件 code**（遵守 module_dev.md 全部红线：require 置顶、incr 固定窗口、add 原子判重、waf_log 前置、fail-safe）：
+**组件 code**（遵守 [component_dev.md](component_dev.md) 全部红线：require 置顶、incr 固定窗口、add 原子判重、waf_log 前置、fail-safe）：
 
 ```lua
 local request = require "resty.jxwaf.request"
@@ -159,13 +159,10 @@ function _M.check(conf_data)
         return
     end
 
-    -- 纯 IP 补 /32，拼为逗号分隔串
+    -- 过滤有效条目（纯 IP 由 parse_cidr 自动按 /32 处理，无需手动补）
     local list = {}
     for _, c in ipairs(cidrs) do
         if type(c) == "string" and c ~= "" then
-            if not string.find(c, "/", 1, true) then
-                c = c .. "/32"
-            end
             table.insert(list, c)
         end
     end
@@ -178,7 +175,8 @@ function _M.check(conf_data)
         return
     end
     -- 仅 CDN 网段来源才信任真实 IP 头（禁止自行实现 CIDR 判断，用内置 iputils）
-    if not iputils.ip_in_cidrs(src_ip, table.concat(list, ",")) then
+    -- 注意：ip_in_cidrs 第二参数必须传 parse_cidrs 返回的 table，不能传逗号分隔字符串
+    if not iputils.ip_in_cidrs(src_ip, iputils.parse_cidrs(list)) then
         return
     end
     local real_ip = ngx.var.http_cdn_src_ip
@@ -291,6 +289,8 @@ jxwaf-cli namelist item-del --params '{"name_list_name":"block_malicious_ip","na
   ]
 }
 ```
+
+**验证注意**：流量规则每条用例仅发送 1 次请求，`bot_check` 拦截需在超阈值后的**下一请求**才生效——验证时把「高频请求」在 `test_cases` 中重复 `exceed_count + 2` 次，或临时调低 `exceed_count`（如 3 配 5 条重复用例），见 [verify.md](verify.md)。
 
 ## 案例复用注意
 

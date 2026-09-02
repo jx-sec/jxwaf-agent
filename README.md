@@ -75,10 +75,12 @@ environment:
 |---|---|
 | [docs/cli.md](docs/cli.md) | 完整命令参考 |
 | [docs/rule_dev.md](docs/rule_dev.md) | 规则与白名单开发规范（匹配参数/运算符全集、AND-OR 语义、正则规范） |
-| [docs/module_dev.md](docs/module_dev.md) | 名单 / 组件（LuaJIT、共享字典、unify_action）/ 网站接入规范 |
+| [docs/module_dev.md](docs/module_dev.md) | 名单 / 网站接入 / 防篡改 / SSL / 域名组 / custom / cache 等模块规范 |
+| [docs/component_dev.md](docs/component_dev.md) | 防护组件开发（LuaJIT、共享字典、unify_action、性能红线） |
 | [docs/playbook.md](docs/playbook.md) | 运维手册（误报/漏报排查、调优原则、PV 限速建议、紧急解封） |
 | [docs/profiles.md](docs/profiles.md) | 实战防护方案库（Log4j / CC 攻击 / CDN 源 IP 等可复用模式） |
 | [docs/verify.md](docs/verify.md) | 验证方法与 SOC 日志分析 |
+| [docs/analysis.md](docs/analysis.md) | 日志分析与报表配方（数据原语地图、场景配方、字段字典） |
 | [docs/sop.md](docs/sop.md) | 安全工作规范（两步审核 / 红线 / SOP） |
 | [docs/versions.md](docs/versions.md) | 三版本差异与能力矩阵 |
 

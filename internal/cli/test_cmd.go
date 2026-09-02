@@ -467,7 +467,8 @@ func runSocQuery(a *adapter.Adapter, c *client.Client, host string, start time.T
 	if err != nil {
 		return nil, err
 	}
-	first, _ := raw["records"].([]any)
+	// 记录数组版本差异：专业版/标准版在 message，云WAF在 records（socLogRecords 兼容两者）
+	first := socLogRecords(raw)
 	all := append([]any{}, first...)
 	pages := 1
 	for page := 2; len(first) > 0 && page <= 5; page++ {
@@ -476,7 +477,7 @@ func runSocQuery(a *adapter.Adapter, c *client.Client, host string, start time.T
 			// 后续页查询失败不致命，保留已取数据并停止翻页
 			break
 		}
-		recs, _ := next["records"].([]any)
+		recs := socLogRecords(next)
 		if len(recs) == 0 {
 			break
 		}
@@ -484,7 +485,11 @@ func runSocQuery(a *adapter.Adapter, c *client.Client, host string, start time.T
 		pages = page
 	}
 	if pages > 1 {
-		raw["records"] = all
+		if _, ok := raw["records"].([]any); ok {
+			raw["records"] = all
+		} else {
+			raw["message"] = all
+		}
 		raw["pages_queried"] = pages
 	}
 	return raw, nil

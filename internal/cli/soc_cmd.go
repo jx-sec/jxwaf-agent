@@ -30,7 +30,8 @@ func newSocCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "soc", Short: "SOC 安全运营中心（日志/事件/统计/模型/用量）"}
 
 	log := &cobra.Command{Use: "log", Short: "攻击日志查询"}
-	log.AddCommand(queryCmd("query", "查询攻击日志（from_time/to_time/page/sql_rules）", adapter.OpSocLogQuery))
+	log.AddCommand(queryCmd("query", "查询攻击日志（from_time/to_time/page/sql_rules；单页 20 条）", adapter.OpSocLogQuery))
+	log.AddCommand(newSocLogFetchCmd())
 
 	event := &cobra.Command{Use: "event", Short: "攻击事件与行为轨迹"}
 	event.AddCommand(

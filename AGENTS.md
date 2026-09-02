@@ -77,8 +77,7 @@ jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|mon
 
 ## 文档索引
 
-- `docs/requirements.md`：需求基线（范围、架构、安全模型、验收标准）
-- `docs/`：命令参考与模块规范（逐步补充）
+- `docs/`：命令参考与模块规范
 - docs.jxwaf.com：官方最新文档（标准版/专业版/云WAF 分站，含部署教程与 API 规范）
 
 ## 开发约定
