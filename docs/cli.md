@@ -198,102 +198,6 @@ jxwaf-cli verify <用例文件> --url https://example.com [--wait 5]
 
 通用 `verify` 仅发送测试流量 + 查 SOC 日志出报告，**不会部署或清空任何配置**。
 
-## WAF 远程部署
-
-### `jxwaf-cli deploy`（节点/全栈）
-
-把 JXWAF 自动部署到用户自己的服务器（**对齐 docs.jxwaf.com 官方部署教程**）：SSH 连接 → 系统探测（OS/架构/权限/CPU/内存）→ 依赖检查（Docker 未装按官方命令安装：`curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun`，阿里云镜像源适配国内网络）→ **端口冲突检测**（列出占用进程，不擅自 kill）→ 生成并上传 docker-compose.yml → 拉取镜像并启动容器 → 验证容器状态与节点日志。
-
-**版本形态**（先问清用户要部署哪个版本）：
-
-| 版本 | 形态 | 必填参数 |
-|---|---|---|
-| `professional` | 节点接入已有控制台（官方教程"节点部署"） | `--server` 控制台地址（末尾不带 `/`）、`--waf-auth` 控制台 waf_auth |
-| `cloud` | 同上（节点接入已有管理控制台） | 同上 |
-| `standard` | **单机全栈**：控制台+节点+MySQL+日志采集一次部署完成（官方"一键部署"），无需 `--server` | `--waf-auth` 自设 UUID（控制台与节点一致） |
-
-```
-export JXWAF_SSH_PASSWORD='<服务器SSH密码>'    # 密码认证（或 --ssh-key 私钥路径）
-jxwaf-cli deploy --host <服务器IP> --user root \
-  --version standard|professional|cloud \
-  [--server http://<控制台地址>] \             # professional/cloud 必填（末尾不带 /）
-  --waf-auth <凭据> \
-  [--http-port 80] [--https-port 443] [--admin-port 8000] [--image <镜像>] [--skip-nft] [--apply]
-```
-
-- **镜像对齐官方教程版本**：professional 节点 `jxwaf_node_professional:6.2.9`、cloud 节点 `jxwaf_node_cloud:6.2.1`（含 `CACHE_MAX_SIZE: 10g`）、standard 全栈（`jxwaf_node_standard:6.2.4` + `jxwaf_admin_server_standard:6.2.5` + `mysql:8.0` + `log_send_to_mysql:v2`）；`--image`/`--nft-image` 可覆盖
-- **默认完整部署**：均含 `jxwaf_nft_node` 网络封禁节点（standard 为 7.0 版，官方带 `WAF_FILTER_PORTS`）；`--skip-nft` 可跳过
-- **环境要求预检**（对齐官方）：Debian 12.x / Ubuntu 20.04+（其他系统告警不阻断）、最低 4 核 8G（低于告警）
-- **两步审核**：默认 dry-run，执行只读前置检查并展示部署计划与完整 compose 内容；`--apply` 才实际变更
-- **端口冲突**：host 网络直占端口（standard 全栈还检查控制台 8000/MySQL 3306/日志 12997），被占时列出占用进程并终止
-- **凭据安全**：SSH 密码仅经环境变量传入不落盘；standard 版 MySQL 密码自动随机生成；远端 compose（含凭据）权限 0600；缺任何必填参数时报错并注明获取方式
-- **控制台无默认账号密码**：JXWAF 控制台不存在任何预置账号（admin / jxwaf_admin 等均不存在），首次使用必须注册账号，再从「系统管理 → 基础信息」获取 waf_auth；禁止编造默认凭据
-- **部署后**：professional/cloud 节点凭 waf_auth 心跳自动注册（控制台"运营中心 → 节点状态"确认上线）；standard 访问 `http://<服务器IP>:8000` 注册账号即可使用
-
-### `jxwaf-cli deploy admin`（管理控制台，prof/cloud 从零搭建用）
-
-从零搭建专业版/云WAF 完整环境时，先部署控制台（官方教程"控制台部署"章节）：`mysql_db`（仅本机监听，密码自动生成）+ `jxwaf_admin_server` + `ssl_cert_service`（泛域名证书自动签发/续期）。
-
-```
-jxwaf-cli deploy admin --host <IP> --version professional|cloud [--admin-port ...] [--apply]
-```
-
-- 镜像：professional `jxwaf_admin_server_professional:6.1.0` / cloud `jxwaf_admin_server_cloud:6.2.1`（默认端口均为 8000，`--admin-port` 可改）
-- **端口约定**：节点是流量入口必须占 80/443，控制台默认不占 80（同机部署控制台+节点不会冲突）；仅控制台与节点分机部署、控制台独占一台服务器时，才显式 `--admin-port 80`
-- cloud 版自动开启 `USER_API_ENABLE: "true"`（用户控制台依赖，官方要求必须开）；模型服务按官方各版配置（prof 39977 / cloud 39980）
-- MySQL 数据目录：prof `/opt/jxwaf_data/mysql` / cloud `/opt/jxwaf_data/mysql_cloud`（对齐官方卸载命令）
-- **部署后**：浏览器访问 `http://<IP>:<端口>` 注册账号 → 系统管理→基础信息 查看 `waf_auth` → 用 `deploy --server http://<IP>:<端口> --waf-auth <waf_auth>` 部署节点
-
-### `jxwaf-cli deploy jlog`（jxlog 日志系统，prof/cloud）
-
-SOC 报表/日志查询依赖 jxlog（官方教程"JXLOG 日志系统部署"章节）：`clickhouse`（22.8.5-alpine）+ `jxlog`（prof `jxlog_professional:1.0` / cloud `jxlog_cloud:1.0`）。
-
-```
-jxwaf-cli deploy jlog --host <IP> --version professional|cloud [--apply]
-```
-
-**部署后到控制台对接**：系统配置→日志传输配置填 `<本机IP>:8877`；日志查询配置填 `<本机IP>:9004`（用户/密码 jxlog/jxlog，库 jxwaf，表 jxlog）。
-
-### `jxwaf-cli deploy remove`（卸载）
-
-```
-jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] [--apply]
-```
-
-对齐官方"卸载系统"流程（`docker compose down`）。三类部署**分目录隔离**（node=/opt/jxwaf_node，admin=/opt/jxwaf_admin，jlog=/opt/jxwaf_jlog），单独卸载互不影响；默认保留数据目录 `/opt/jxwaf_data`（重新部署可复用），`--purge-data` 连数据一起删（不可恢复，注意同机多组件时会删全部组件数据）。默认 dry-run，`--apply` 执行。
-
-### `jxwaf-cli deploy exec`（远程命令执行，AI 自主诊断通道）
-
-```
-jxwaf-cli deploy exec --host <IP> --cmd "<命令>" [--user root] [--ssh-key <私钥>] [--timeout 秒] [--approve]
-```
-
-在目标服务器执行命令，用于 AI 自主诊断。安全模型：
-
-- **只读诊断命令直接执行**并返回 `{host, command, exit_code, stdout, stderr}`（如 `docker ps -a`、`docker logs`、`ss -tlnp`、`df -h`、`free -m`、`systemctl status`）
-- **风险命令默认拒绝**：命中红线（`kill`/`pkill`、`systemctl stop`、`rm`、`docker down/rm/stop`、`reboot`/`shutdown`、`mkfs`/`dd`、`iptables`/`nft` 修改等）时直接报错拒绝，不执行
-- **`--approve` 执行风险命令**：AI 先向用户展示命令与影响，用户明确确认后才加 `--approve` 执行（审批决策在 AI 编排层，CLI 侧强制拦截兜底）
-- **`--timeout` 超时**：命令执行超时秒数（默认 30，`0` 表示不超时），防止 `docker logs -f`、`tail -f`、`ping` 等不退出命令挂死
-
-### `jxwaf-cli deploy version`（查看本地生成用镜像版本）
-
-```
-jxwaf-cli deploy version
-```
-
-查看显式 `--source generate` 本地生成用的镜像版本（项目目录 `versions.json`）。部署默认每次从官方 GitHub 多通道获取最新 compose（`--source github`：本机 raw → GitHub Contents API → 服务器 git clone），成功获取后自动刷新 versions.json；**获取不到最新官方 compose 时直接失败，不自动降级本地模板**；仅在显式 `--source generate` 时才用 versions.json 本地生成。详见 [deploy.md](deploy.md)。
-
-### prof/cloud 完整环境从零搭建顺序
-
-```
-1. deploy admin --version <v> --apply          # 控制台（注册账号，拿 waf_auth）
-2. deploy --version <v> --server http://<控制台IP>:<端口> --waf-auth <waf_auth> --apply   # 节点（可多台）
-3. deploy jlog --version <v> --apply           # jxlog（按需；SOC 报表/日志查询依赖）→ 控制台对接
-```
-
-- **compose 来源**：部署**每次都会获取最新 compose**（`--source github`，多通道：本机 raw → GitHub Contents API → 服务器 git clone，任一失败会改用下一通道重新获取；**全部失败直接报错，不自动降级本地模板**）；成功获取后自动刷新 `versions.json`（供显式 `--source generate` 使用）；`--source git` 仅服务器 git clone；`--source generate` 显式本地生成。`jxwaf-cli deploy version` 查看本地生成用版本；`--image`/`--nft-image` 等覆盖参数仍可单次临时指定。详见 [deploy.md](deploy.md)
-- **单机全栈形态**（控制台/节点/jlog 同一台服务器）：按默认参数顺序部署即可——控制台 8000、节点 80/443、jlog 8877/9000/9004，互不冲突；节点 `--server` 填 `http://<控制台IP>:8000`
-
 ## 典型工作流
 
 ```
@@ -301,4 +205,4 @@ jxwaf-cli deploy version
 → 误报/漏报则改参数重试(≤3次) → cleanup 清理 → 用户确认 → 生产 --apply
 ```
 
-自动化部署指南（架构选型/多节点/纳管衔接）见 [deploy.md](deploy.md)；安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)；日志分析与报表配方见 [analysis.md](analysis.md)。
+安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)；日志分析与报表配方见 [analysis.md](analysis.md)。

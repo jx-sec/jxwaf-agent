@@ -25,7 +25,7 @@ environment:
   ADMIN_API_WHITELIST: "*"   # 白名单：逗号分隔 IP/域名/网段；"*" 或空为全放行
 ```
 
-`ADMIN_API_WHITELIST` 是IP白名单列表，CLI 所在机器出口 IP 不命中会被拒绝（"ip not allowed"）。办公电脑出口 IP 不固定，一般直接设 `*` 即可（接口本身仍受 waf_auth 认证保护）；生产环境建议收紧为固定 IP/网段。通过 `jxwaf-cli deploy` 部署的环境同样默认关闭，需修改 `docker-compose.yml` 后 `docker compose up -d` 生效。
+`ADMIN_API_WHITELIST` 是IP白名单列表，CLI 所在机器出口 IP 不命中会被拒绝（"ip not allowed"）。办公电脑出口 IP 不固定，一般直接设 `*` 即可（接口本身仍受 waf_auth 认证保护）；生产环境建议收紧为固定 IP/网段。
 
 自有环境未配置时，除 `config`/`generate`/`test` 外的操作命令（apply / verify / rule 等）都会**直接终止并报错**，不会执行任何下发或验证动作；官方测试环境开箱即用，`test verify` 可直接使用。配置后用 `config show`（凭据脱敏）与 `config validate`（连通性自检）确认就绪。
 
@@ -74,7 +74,6 @@ environment:
 | 文档 | 内容 |
 |---|---|
 | [docs/cli.md](docs/cli.md) | 完整命令参考 |
-| [docs/deploy.md](docs/deploy.md) | 自动化部署指南（架构选型、多节点扩展、纳管衔接、卸载升级） |
 | [docs/rule_dev.md](docs/rule_dev.md) | 规则与白名单开发规范（匹配参数/运算符全集、AND-OR 语义、正则规范） |
 | [docs/module_dev.md](docs/module_dev.md) | 名单 / 网站接入 / 防篡改 / SSL / 域名组 / custom / cache 等模块规范 |
 | [docs/component_dev.md](docs/component_dev.md) | 防护组件开发（LuaJIT、共享字典、unify_action、性能红线） |
@@ -84,25 +83,6 @@ environment:
 | [docs/analysis.md](docs/analysis.md) | 日志分析与报表配方（数据原语地图、场景配方、字段字典） |
 | [docs/sop.md](docs/sop.md) | 安全工作规范（两步审核 / 红线 / SOP） |
 | [docs/versions.md](docs/versions.md) | 三版本差异与能力矩阵 |
-
-## WAF 远程部署
-
-```
-export JXWAF_SSH_PASSWORD='<服务器SSH密码>'
-jxwaf-cli deploy --host <IP> --version standard --waf-auth <自设UUID> --apply   # 标准版单机全栈
-
-# 专业版/云WAF 从零搭建（分离部署）：
-jxwaf-cli deploy admin --host <IP> --version professional --apply    # 1. 控制台（注册拿 waf_auth）
-jxwaf-cli deploy --host <IP> --version professional \
-  --server http://<控制台地址> --waf-auth <凭据> --apply              # 2. 节点（可多台）
-jxwaf-cli deploy jlog --host <IP> --version professional --apply    # 3. jxlog 日志系统（SOC 依赖）
-
-jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] --apply   # 卸载
-```
-
-对齐 docs.jxwaf.com 官方部署教程：Docker 缺失按官方命令安装（`--mirror Aliyun` 适配国内网络）；standard 单机全栈，professional/cloud 支持控制台/节点/jxlog 三组件分离部署；自动完成环境探测（OS/配置告警）、端口冲突检测（列出占用进程）、上传 compose（0600）、拉起容器、验证。默认 dry-run 展示计划，`--apply` 执行。**注意**：部署出的控制台 Admin API 默认关闭，需按"环境前置条件"开启后方可纳入 CLI 管理。
-
-**镜像版本与 compose 获取**：部署默认**从官方 GitHub 仓库 `jx-sec/jxwaf` 获取最新 compose**（`--source github`），保证版本与官方一致；多通道获取（本机 raw → GitHub Contents API → 服务器 git clone），任一失败会改用下一通道重新获取，**全部失败直接报错、不自动降级本地旧模板**；仅显式 `--source generate` 才用 versions.json 本地生成。`jxwaf-cli deploy version` 查看本地生成用镜像版本。详见 [docs/deploy.md](docs/deploy.md)。
 
 ## AI IDE 接入
 

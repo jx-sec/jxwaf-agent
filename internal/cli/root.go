@@ -32,7 +32,6 @@ func newRootCmd() *cobra.Command {
 	cmd.AddCommand(newVerifyCmd())
 	cmd.AddCommand(newCleanupCmd())
 	cmd.AddCommand(newResetCmd())
-	cmd.AddCommand(newDeployCmd())
 	cmd.AddCommand(newRuleCmd())
 	cmd.AddCommand(newWhiteCmd())
 	cmd.AddCommand(newTamperCmd())

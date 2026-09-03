@@ -59,11 +59,6 @@ jxwaf-cli test verify <信封文件>    # 测试环境一键闭环：清基线�
 jxwaf-cli test reset|cleanup      # 测试环境清空/删除
 jxwaf-cli apply ... [--apply]        # 自有环境下发（dry-run 默认）
 jxwaf-cli verify <用例> --url URL    # 通用流量验证（不动配置）
-jxwaf-cli deploy --host IP --version professional --server URL --waf-auth T [--apply]  # 节点部署（standard 单机全栈无需 --server）
-jxwaf-cli deploy admin|jlog --host IP --version professional|cloud [--apply]  # 控制台/jxlog 部署（prof/cloud 从零搭建）
-jxwaf-cli deploy remove --host IP [--target node|admin|jlog] [--apply]  # 卸载
-jxwaf-cli deploy exec --host IP --cmd "<命令>" [--approve]  # 服务器执行命令（只读直接执行；风险命令需 --approve）
-jxwaf-cli deploy version  # 查看本地生成用镜像版本（默认 --source github 多通道获取官方最新 compose，--source generate 才用本地模板）
 jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|monitor|subaccount|custom|cache|sysconf ...
 ```
 
