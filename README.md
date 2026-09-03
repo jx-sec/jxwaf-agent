@@ -102,7 +102,7 @@ jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] --
 
 对齐 docs.jxwaf.com 官方部署教程：Docker 缺失按官方命令安装（`--mirror Aliyun` 适配国内网络）；standard 单机全栈，professional/cloud 支持控制台/节点/jxlog 三组件分离部署；自动完成环境探测（OS/配置告警）、端口冲突检测（列出占用进程）、上传 compose（0600）、拉起容器、验证。默认 dry-run 展示计划，`--apply` 执行。**注意**：部署出的控制台 Admin API 默认关闭，需按"环境前置条件"开启后方可纳入 CLI 管理。
 
-**镜像版本与 compose 来源**：部署默认**从官方 GitHub 仓库 `jx-sec/jxwaf` 获取最新 compose**（`--source github`），保证版本与官方一致；降级链为「本地拉取 → 服务器 git clone → 本地生成」，每次降级输出 `degraded` 提示；`jxwaf-cli deploy version` 查看本地生成兜底版本。详见 [docs/deploy.md](docs/deploy.md)。
+**镜像版本与 compose 获取**：部署默认**从官方 GitHub 仓库 `jx-sec/jxwaf` 获取最新 compose**（`--source github`），保证版本与官方一致；多通道获取（本机 raw → GitHub Contents API → 服务器 git clone），任一失败会改用下一通道重新获取，**全部失败直接报错、不自动降级本地旧模板**；仅显式 `--source generate` 才用 versions.json 本地生成。`jxwaf-cli deploy version` 查看本地生成用镜像版本。详见 [docs/deploy.md](docs/deploy.md)。
 
 ## AI IDE 接入
 

@@ -40,8 +40,8 @@ func DefaultVersions() Versions {
 		Clickhouse:     "ccr.ccs.tencentyun.com/jxwaf/clickhouse-server:22.8.5-alpine",
 		LogSendToMySQL: "ccr.ccs.tencentyun.com/jxwaf/log_send_to_mysql:v2",
 		Standard: StackImages{
-			Node:  "ccr.ccs.tencentyun.com/jxwaf/jxwaf_node_standard:6.1.7",
-			Admin: "ccr.ccs.tencentyun.com/jxwaf/jxwaf_admin_server_standard:6.1.14",
+			Node:  "ccr.ccs.tencentyun.com/jxwaf/jxwaf_node_standard:6.2.4",
+			Admin: "ccr.ccs.tencentyun.com/jxwaf/jxwaf_admin_server_standard:6.2.5",
 			NFT:   "ccr.ccs.tencentyun.com/jxwaf/jxwaf_nft_node:7.0",
 		},
 		Professional: StackImages{

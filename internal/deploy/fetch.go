@@ -1,6 +1,8 @@
 package deploy
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +13,9 @@ import (
 
 // officialRawBase 官方 GitHub 仓库 raw 文件基地址（jx-sec/jxwaf，master 分支）。
 const officialRawBase = "https://raw.githubusercontent.com/jx-sec/jxwaf/master/"
+
+// githubContentsAPI 官方 GitHub Contents API 基地址（raw 域网络不可达时的备用通道）。
+const githubContentsAPI = "https://api.github.com/repos/jx-sec/jxwaf/contents/"
 
 // composeFiles 各部署目标与版本的官方 compose 文件路径。
 // target 取值：node（节点/standard 全栈）/ admin（管理控制台）/ jlog（jxlog 日志系统）。
@@ -35,7 +40,7 @@ type InjectParams struct {
 }
 
 // FetchCompose 从官方 GitHub 拉取对应版本组件的 compose 并注入部署参数。
-// 返回注入后的 compose 内容；拉取失败时返回错误（调用方降级到本地生成）。
+// 内部已做多通道获取（raw → GitHub Contents API）；返回注入后的 compose 内容，失败时返回错误。
 func FetchCompose(version, target string, inj InjectParams) (string, error) {
 	raw, err := fetchRawCompose(version, target)
 	if err != nil {
@@ -46,25 +51,68 @@ func FetchCompose(version, target string, inj InjectParams) (string, error) {
 }
 
 // fetchRawCompose 拉取官方 compose 原始内容。
+// 主通道 raw.githubusercontent.com，失败后自动切换到 GitHub Contents API 备用通道重新获取
+// （某些网络下 raw 域不稳定而 api.github.com 可达）。两通道均失败才返回错误。
 func fetchRawCompose(version, target string) (string, error) {
 	path, ok := composeFiles[target+":"+version]
 	if !ok {
 		return "", fmt.Errorf("未知部署目标/版本组合：%s/%s", target, version)
 	}
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Get(officialRawBase + path)
+
+	// 通道 1：raw.githubusercontent.com（官方原始文件）
+	body, err := httpGetBody(officialRawBase+path, 30*time.Second)
+	if err == nil {
+		return body, nil
+	}
+
+	// 通道 2：GitHub Contents API（base64 编码 JSON）
+	apiBody, apiErr := fetchViaGithubAPI(path)
+	if apiErr == nil {
+		return apiBody, nil
+	}
+	return "", fmt.Errorf("拉取官方 compose 失败（%s）: %v（备用通道: %v）", path, err, apiErr)
+}
+
+// fetchViaGithubAPI 通过 GitHub Contents API 获取仓库文件内容（自动 base64 解码）。
+func fetchViaGithubAPI(path string) (string, error) {
+	type ghResp struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+	}
+	raw, err := httpGetBody(githubContentsAPI+path, 30*time.Second)
 	if err != nil {
-		return "", fmt.Errorf("拉取官方 compose 失败（%s）: %w", path, err)
+		return "", err
+	}
+	var resp ghResp
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return "", fmt.Errorf("解析 GitHub API 响应失败: %w", err)
+	}
+	if resp.Encoding != "base64" || resp.Content == "" {
+		return "", fmt.Errorf("GitHub API 响应异常（encoding=%s）", resp.Encoding)
+	}
+	data, err := base64.StdEncoding.DecodeString(resp.Content)
+	if err != nil {
+		return "", fmt.Errorf("GitHub API 内容 base64 解码失败: %w", err)
+	}
+	return string(data), nil
+}
+
+// httpGetBody 请求 URL 返回响应体字符串。
+func httpGetBody(url string, timeout time.Duration) (string, error) {
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("拉取官方 compose 失败（%s）：HTTP %d", path, resp.StatusCode)
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("读取官方 compose 失败: %w", err)
+		return "", err
 	}
-	return string(body), nil
+	return string(b), nil
 }
 
 // injectCompose 将部署参数注入官方 compose（按字段名正则替换值，不依赖官方具体默认值）。
@@ -134,7 +182,7 @@ func replaceEnvValue(s, key, oldValue, newValue string) string {
 const gitCloneDir = "/opt/jxwaf_git_repo"
 
 // GitCloneCompose 在目标服务器上 git clone 官方仓库，读取对应 compose 并注入参数。
-// 作为本地拉取 raw 失败时的兜底（服务器网络访问 GitHub 可能优于本地）。
+// 作为本机官方通道失败时的另一获取通道（服务器网络访问 GitHub 可能优于本地）。
 func GitCloneCompose(c *SSHClient, version, target string, inj InjectParams) (string, error) {
 	path, ok := composeFiles[target+":"+version]
 	if !ok {
@@ -158,7 +206,7 @@ func GitCloneCompose(c *SSHClient, version, target string, inj InjectParams) (st
 var imagePattern = regexp.MustCompile(`(?m)^[ \t]*image:[ \t]*"?([^"\s]+)"?`)
 
 // RefreshVersionsFromCompose 从官方 compose 提取镜像，更新 versions.json，
-// 使本地生成兜底（--source generate / 降级）也能使用最新版本。刷新失败静默忽略。
+// 供显式 --source generate 本地生成时使用最新版本。刷新失败静默忽略。
 func RefreshVersionsFromCompose(version, compose string) {
 	v, err := LoadVersions()
 	if err != nil {

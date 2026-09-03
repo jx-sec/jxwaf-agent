@@ -3,7 +3,7 @@
 > 本文是 JXWAF 的**部署决策与生命周期指南**：架构选型、部署规划、多节点扩展、纳管衔接、验证上线、卸载与升级。
 > `deploy` 命令的**参数/用法参考**见 [cli.md](cli.md)「WAF 远程部署」章节；本文聚焦「怎么部署才正确、多节点怎么搭」，不重复罗列参数。
 >
-> 权威依据：官方 GitHub 仓库 `jx-sec/jxwaf` 各版本 `docker-compose.yml`（及 docs.jxwaf.com 各版本分站 `Deployment-Tutorial`）。CLI 的 `deploy` 命令默认**从官方仓库拉取最新 compose 并注入参数部署**，将官方手动流程（`git clone` + 改 `docker-compose.yml` + `docker compose up -d`）自动化；拉取失败自动降级本地生成。
+> 权威依据：官方 GitHub 仓库 `jx-sec/jxwaf` 各版本 `docker-compose.yml`（及 docs.jxwaf.com 各版本分站 `Deployment-Tutorial`）。CLI 的 `deploy` 命令默认**从官方仓库获取最新 compose 并注入参数部署**，将官方手动流程（`git clone` + 改 `docker-compose.yml` + `docker compose up -d`）自动化。
 
 ## 一、部署形态总览
 
@@ -37,25 +37,25 @@ JXWAF 三个版本对应三种部署形态，由 `deploy` 命令统一承载：
 | ssl_cert_service / clickhouse | `ssl_cert_service` / `clickhouse-server` |
 | jxlog professional / cloud | `jxlog_professional` / `jxlog_cloud` |
 
-### 部署策略（compose 来源）
+### 部署策略（compose 获取）
 
-部署**每次都会获取最新 compose**，注入参数后部署，保证版本与官方一致。compose 来源为三级降级链：
+部署**每次都会获取最新 compose**，注入参数后部署，保证版本与官方一致。**以官方为准**：获取不到最新官方 compose 时**直接失败**，不自动降级本地旧模板（避免部署与官方不一致）。compose 获取为多通道，任一通道失败会先改用下一种方式**重新获取**，而不是没尝试就报失败：
 
 ```
-主路径：deploy 从 raw.githubusercontent.com 本地拉取官方 compose（每次实时）
-降级 1：本地拉取失败（网络问题）→ 服务器 git clone 官方仓库获取
-降级 2：git clone 也失败 → 本地生成（版本来自 versions.json）
-       → 每次降级均输出 degraded 提示
+通道 1：deploy 从本机 raw.githubusercontent.com 拉取官方 compose（每次实时）
+通道 2：raw 通道失败 → 本机 GitHub Contents API（api.github.com）重新获取
+通道 3：本机两通道均失败 → 服务器 git clone 官方仓库重新获取（服务器网络可能可达）
+       → 全部失败：直接返回失败（报错并列出各通道错误与排查方向）
 注入参数（waf_auth / server / 端口 / MySQL 随机密码）→ dry-run 展示 → 用户确认 → 上传部署
 ```
 
-- **自动刷新**：每次成功拉取官方 compose 后，自动提取镜像版本回写 `versions.json`，使本地生成兜底也保持最新
-- `--source github`（默认）：本地拉取 → 降级 git clone → 降级本地生成
-- `--source git`：直接服务器 git clone → 降级本地生成
-- `--source generate`：强制本地生成（版本来自 versions.json，即最近一次成功拉取/手动维护的版本）
-- `jxwaf-cli deploy version`：查看本地生成兜底用的镜像版本（versions.json）
+- **自动刷新**：每次成功获取官方 compose 后，自动提取镜像版本回写 `versions.json`，供显式 `--source generate` 离线生成时使用
+- `--source github`（默认）：本机 raw → 本机 GitHub Contents API → 服务器 git clone，全失败直接报错（不再降级本地生成）
+- `--source git`：仅服务器 git clone 官方仓库，失败直接报错
+- `--source generate`：**显式**本地生成（仅明确要求离线模板时使用；版本来自 versions.json，即最近一次成功获取/手动维护的版本）
+- `jxwaf-cli deploy version`：查看 `--source generate` 本地生成用的镜像版本（versions.json）
 - `--image` / `--nft-image` / `--ssl-cert-image` / `--clickhouse-image` 仍可单次临时覆盖
-- dry-run 输出 `compose_source` 字段标明实际来源（github / git / generate），`degraded` 字段提示降级
+- dry-run 输出 `compose_source` 字段标明实际来源（github / git / generate）；本机通道失败后改用服务器 git clone 成功时输出 `degraded` 提示（仅说明通道切换，版本仍为官方最新，非版本降级）
 
 ## 三、环境要求与端口约定
 

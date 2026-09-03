@@ -63,7 +63,7 @@ jxwaf-cli deploy --host IP --version professional --server URL --waf-auth T [--a
 jxwaf-cli deploy admin|jlog --host IP --version professional|cloud [--apply]  # 控制台/jxlog 部署（prof/cloud 从零搭建）
 jxwaf-cli deploy remove --host IP [--target node|admin|jlog] [--apply]  # 卸载
 jxwaf-cli deploy exec --host IP --cmd "<命令>" [--approve]  # 服务器执行命令（只读直接执行；风险命令需 --approve）
-jxwaf-cli deploy version  # 查看本地生成兜底版本（部署默认从官方 GitHub 拉取 compose，--source github）
+jxwaf-cli deploy version  # 查看本地生成用镜像版本（默认 --source github 多通道获取官方最新 compose，--source generate 才用本地模板）
 jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|monitor|subaccount|custom|cache|sysconf ...
 ```
 

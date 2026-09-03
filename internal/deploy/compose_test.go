@@ -222,8 +222,8 @@ func TestGenerateComposeStandardFullStack(t *testing.T) {
 	// 单机全栈五服务（对齐官方标准版教程）
 	for _, want := range []string{
 		"mysql_db:", "jxwaf/mysql:8.0", "MYSQL_ROOT_PASSWORD: fixed-pwd-for-test",
-		"jxwaf_admin_server:", "jxwaf_admin_server_standard:6.1.14", "HTTP_PORT: 8000",
-		"jxwaf_node_standard:", "jxwaf_node_standard:6.1.7",
+		"jxwaf_admin_server:", "jxwaf_admin_server_standard:6.2.5", "HTTP_PORT: 8000",
+		"jxwaf_node_standard:", "jxwaf_node_standard:6.2.4",
 		"JXWAF_SERVER: http://127.0.0.1:8000", // 控制台在本机
 		"log_send_to_mysql:", "log_send_to_mysql:v2", "LISTEN_ADDR: \":12997\"",
 		"jxwaf_nft_node:", "jxwaf_nft_node:7.0", "WAF_FILTER_PORTS: \"80,443\"",

@@ -121,7 +121,7 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 
 			apply, _ := cmd.Flags().GetBool("apply")
 
-			// SSH 连接（提前建立：供 git clone 兜底与后续前置检查/部署使用）
+			// SSH 连接（提前建立：供服务器 git clone 通道与后续前置检查/部署使用）
 			c, err := deploy.DialSSH(opts.Host, opts.User, opts.SSHKey)
 			if err != nil {
 				return nil, err
@@ -195,7 +195,7 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 	cmd.Flags().StringVar(&nftImg, "nft-image", "", "覆盖 nft_node 镜像")
 	cmd.Flags().BoolVar(&skipChk, "skip-port-check", false, "跳过端口冲突检查（明确接受占用时使用）")
 	cmd.Flags().IntVar(&waitSec, "wait", 15, "容器启动后等待验证的秒数")
-	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（本地拉取，降级 git clone/本地生成）| git（服务器 git clone）| generate（本地生成）")
+	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（默认，多通道获取官方最新：本机 raw→GitHub API→服务器 git clone，全失败直接报错）| git（服务器 git clone，失败直接报错）| generate（显式本地生成，版本来自 versions.json）")
 	cmd.Flags().Bool("apply", false, "实际执行部署（默认 dry-run 仅预览计划）")
 	return cmd
 }
@@ -388,7 +388,7 @@ func newDeployAdminCmd() *cobra.Command {
 	cmd.Flags().StringVar(&adminImg, "image", "", "覆盖控制台镜像")
 	cmd.Flags().StringVar(&sslImg, "ssl-cert-image", "", "覆盖 ssl_cert_service 镜像")
 	cmd.Flags().IntVar(&waitSec, "wait", 20, "容器启动后等待验证的秒数（MySQL 首次初始化较慢）")
-	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（本地拉取，降级 git clone/本地生成）| git（服务器 git clone）| generate（本地生成）")
+	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（默认，多通道获取官方最新：本机 raw→GitHub API→服务器 git clone，全失败直接报错）| git（服务器 git clone，失败直接报错）| generate（显式本地生成，版本来自 versions.json）")
 	cmd.Flags().Bool("apply", false, "实际执行部署（默认 dry-run 仅预览）")
 	return cmd
 }
@@ -482,7 +482,7 @@ func newDeployJlogCmd() *cobra.Command {
 	cmd.Flags().StringVar(&jlogImg, "image", "", "覆盖 jxlog 镜像")
 	cmd.Flags().StringVar(&chImg, "clickhouse-image", "", "覆盖 clickhouse 镜像")
 	cmd.Flags().IntVar(&waitSec, "wait", 15, "容器启动后等待验证的秒数")
-	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（本地拉取，降级 git clone/本地生成）| git（服务器 git clone）| generate（本地生成）")
+	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（默认，多通道获取官方最新：本机 raw→GitHub API→服务器 git clone，全失败直接报错）| git（服务器 git clone，失败直接报错）| generate（显式本地生成，版本来自 versions.json）")
 	cmd.Flags().Bool("apply", false, "实际执行部署（默认 dry-run 仅预览）")
 	return cmd
 }
@@ -585,13 +585,18 @@ func newDeployVersionCmd() *cobra.Command {
 	return cmd
 }
 
-// resolveCompose 根据 --source 决定 compose 来源，降级链为：
-//   - "generate"：本地生成（compose.go 模板，版本来自 versions.json）
-//   - "github"（默认）：本地拉取官方 raw → 失败降级服务器 git clone → 再失败降级本地生成
-//   - "git"：服务器 git clone 官方仓库 → 失败降级本地生成
+// resolveCompose 根据 --source 决定 compose 来源：
+//   - "generate"（显式）：本地生成（compose.go 模板，版本来自 versions.json）
+//   - "github"（默认）：多通道获取官方最新 compose —— 本机 raw.githubusercontent.com
+//     → GitHub Contents API → 服务器 git clone；全失败直接报错（不再自动降级本地生成）
+//   - "git"：服务器 git clone 官方仓库 → 失败直接报错
 //
-// c 为已建立的 SSH 连接（用于 git clone 兜底），可为 nil（此时跳过 git clone）。
-// 返回 compose 内容、实际来源（github/git/generate）、降级提示（发生降级时非空）。
+// 获取原则：以官方为准。任一通道失败会先尝试下一种方式重新获取，而不是没尝试就报失败；
+// 所有官方通道都拿不到最新 compose 时直接返回失败，避免用本地旧模板静默兜底导致与官方不一致。
+// 确需离线本地模板时显式 --source generate。
+//
+// c 为已建立的 SSH 连接（用于服务器 git clone 通道），可为 nil（此时跳过该通道）。
+// 返回 compose 内容、实际来源（github/git/generate）、通道提示（本机通道失败改用其他官方通道时非空，仅说明，非版本降级）。
 func resolveCompose(c *deploy.SSHClient, version, target, source string, inj deploy.InjectParams, gen func() (string, error)) (string, string, string, error) {
 	if source == "generate" {
 		y, err := gen()
@@ -602,15 +607,11 @@ func resolveCompose(c *deploy.SSHClient, version, target, source string, inj dep
 		if c == nil {
 			return "", "", "", fmt.Errorf("--source git 需要已建立的 SSH 连接（用于服务器 git clone）")
 		}
-		gy, gerr := deploy.GitCloneCompose(c, version, target, inj)
-		if gerr == nil {
-			return gy, "git", "", nil
+		gy, err := deploy.GitCloneCompose(c, version, target, inj)
+		if err != nil {
+			return "", "", "", fmt.Errorf("服务器 git clone 官方 compose 失败: %v（可检查服务器到 github.com 的连通性，或改用默认 --source github 由本机多通道拉取）", err)
 		}
-		ly, lerr := gen()
-		if lerr != nil {
-			return "", "", "", fmt.Errorf("git clone 失败（%v），本地生成也失败（%v）", gerr, lerr)
-		}
-		return ly, "generate", fmt.Sprintf("git clone 失败（%v），已降级本地生成（镜像版本可能滞后）", gerr), nil
+		return gy, "git", "", nil
 	}
 
 	// source == "github"（默认）
@@ -618,16 +619,12 @@ func resolveCompose(c *deploy.SSHClient, version, target, source string, inj dep
 	if err == nil {
 		return y, "github", "", nil
 	}
+	// 本机官方通道（raw + GitHub Contents API）失败：改用服务器 git clone 重新获取（服务器网络可能可达 github.com）
 	if c != nil {
 		if gy, gerr := deploy.GitCloneCompose(c, version, target, inj); gerr == nil {
-			return gy, "git", fmt.Sprintf("本地拉取官方 compose 失败（%v），已通过服务器 git clone 获取", err), nil
-		} else {
-			err = fmt.Errorf("本地拉取失败（%v），git clone 也失败（%v）", err, gerr)
+			return gy, "git", fmt.Sprintf("本机拉取官方 compose 失败（%v），已改用服务器 git clone 重新获取成功", err), nil
 		}
+		return "", "", "", fmt.Errorf("获取官方最新 compose 失败：本机 raw.githubusercontent.com、GitHub Contents API、服务器 git clone 均未成功（最后错误：%v）。请检查本机/服务器到 GitHub 的网络连通性后重试；CLI 默认不再降级本地旧模板，避免部署与官方版本不一致", err)
 	}
-	ly, lerr := gen()
-	if lerr != nil {
-		return "", "", "", fmt.Errorf("官方 compose 获取失败（%v），本地生成也失败（%v）", err, lerr)
-	}
-	return ly, "generate", fmt.Sprintf("官方 compose 获取失败（%v），已降级本地生成（镜像版本可能滞后于官方）", err), nil
+	return "", "", "", fmt.Errorf("获取官方最新 compose 失败：本机 raw.githubusercontent.com、GitHub Contents API 均未成功（最后错误：%v）。请检查本机到 GitHub 的网络连通性后重试；CLI 默认不再降级本地旧模板，避免部署与官方版本不一致", err)
 }

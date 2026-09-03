@@ -221,7 +221,7 @@ jxwaf-cli deploy --host <服务器IP> --user root \
   [--http-port 80] [--https-port 443] [--admin-port 8000] [--image <镜像>] [--skip-nft] [--apply]
 ```
 
-- **镜像对齐官方教程版本**：professional 节点 `jxwaf_node_professional:6.1.0`、cloud 节点 `jxwaf_node_cloud:6.2.1`（含 `CACHE_MAX_SIZE: 10g`）、standard 全栈（`jxwaf_node_standard:6.1.7` + `jxwaf_admin_server_standard:6.1.14` + `mysql:8.0` + `log_send_to_mysql:v2`）；`--image`/`--nft-image` 可覆盖
+- **镜像对齐官方教程版本**：professional 节点 `jxwaf_node_professional:6.2.9`、cloud 节点 `jxwaf_node_cloud:6.2.1`（含 `CACHE_MAX_SIZE: 10g`）、standard 全栈（`jxwaf_node_standard:6.2.4` + `jxwaf_admin_server_standard:6.2.5` + `mysql:8.0` + `log_send_to_mysql:v2`）；`--image`/`--nft-image` 可覆盖
 - **默认完整部署**：均含 `jxwaf_nft_node` 网络封禁节点（standard 为 7.0 版，官方带 `WAF_FILTER_PORTS`）；`--skip-nft` 可跳过
 - **环境要求预检**（对齐官方）：Debian 12.x / Ubuntu 20.04+（其他系统告警不阻断）、最低 4 核 8G（低于告警）
 - **两步审核**：默认 dry-run，执行只读前置检查并展示部署计划与完整 compose 内容；`--apply` 才实际变更
@@ -275,13 +275,13 @@ jxwaf-cli deploy exec --host <IP> --cmd "<命令>" [--user root] [--ssh-key <私
 - **`--approve` 执行风险命令**：AI 先向用户展示命令与影响，用户明确确认后才加 `--approve` 执行（审批决策在 AI 编排层，CLI 侧强制拦截兜底）
 - **`--timeout` 超时**：命令执行超时秒数（默认 30，`0` 表示不超时），防止 `docker logs -f`、`tail -f`、`ping` 等不退出命令挂死
 
-### `jxwaf-cli deploy version`（查看本地生成兜底版本）
+### `jxwaf-cli deploy version`（查看本地生成用镜像版本）
 
 ```
 jxwaf-cli deploy version
 ```
 
-查看本地生成兜底用的镜像版本（项目目录 `versions.json`）。部署默认每次从官方 GitHub 获取最新 compose（`--source github`），成功拉取后自动刷新 versions.json；versions.json 仅在降级本地生成（`--source generate`）时使用。详见 [deploy.md](deploy.md)。
+查看显式 `--source generate` 本地生成用的镜像版本（项目目录 `versions.json`）。部署默认每次从官方 GitHub 多通道获取最新 compose（`--source github`：本机 raw → GitHub Contents API → 服务器 git clone），成功获取后自动刷新 versions.json；**获取不到最新官方 compose 时直接失败，不自动降级本地模板**；仅在显式 `--source generate` 时才用 versions.json 本地生成。详见 [deploy.md](deploy.md)。
 
 ### prof/cloud 完整环境从零搭建顺序
 
@@ -291,7 +291,7 @@ jxwaf-cli deploy version
 3. deploy jlog --version <v> --apply           # jxlog（按需；SOC 报表/日志查询依赖）→ 控制台对接
 ```
 
-- **compose 来源**：部署**每次都会获取最新 compose**（`--source github`，降级链：本地拉取 → 服务器 git clone → 本地生成，每次降级输出 `degraded` 提示）；成功拉取后自动刷新 `versions.json`，使本地生成兜底也保持最新；`--source git` 直接服务器 git clone；`--source generate` 强制本地生成。`jxwaf-cli deploy version` 查看本地生成兜底版本；`--image`/`--nft-image` 等覆盖参数仍可单次临时指定。详见 [deploy.md](deploy.md)
+- **compose 来源**：部署**每次都会获取最新 compose**（`--source github`，多通道：本机 raw → GitHub Contents API → 服务器 git clone，任一失败会改用下一通道重新获取；**全部失败直接报错，不自动降级本地模板**）；成功获取后自动刷新 `versions.json`（供显式 `--source generate` 使用）；`--source git` 仅服务器 git clone；`--source generate` 显式本地生成。`jxwaf-cli deploy version` 查看本地生成用版本；`--image`/`--nft-image` 等覆盖参数仍可单次临时指定。详见 [deploy.md](deploy.md)
 - **单机全栈形态**（控制台/节点/jlog 同一台服务器）：按默认参数顺序部署即可——控制台 8000、节点 80/443、jlog 8877/9000/9004，互不冲突；节点 `--server` 填 `http://<控制台IP>:8000`
 
 ## 典型工作流
