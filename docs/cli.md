@@ -262,6 +262,27 @@ jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] [-
 
 对齐官方"卸载系统"流程（`docker compose down`）。三类部署**分目录隔离**（node=/opt/jxwaf_node，admin=/opt/jxwaf_admin，jlog=/opt/jxwaf_jlog），单独卸载互不影响；默认保留数据目录 `/opt/jxwaf_data`（重新部署可复用），`--purge-data` 连数据一起删（不可恢复，注意同机多组件时会删全部组件数据）。默认 dry-run，`--apply` 执行。
 
+### `jxwaf-cli deploy exec`（远程命令执行，AI 自主诊断通道）
+
+```
+jxwaf-cli deploy exec --host <IP> --cmd "<命令>" [--user root] [--ssh-key <私钥>] [--timeout 秒] [--approve]
+```
+
+在目标服务器执行命令，用于 AI 自主诊断。安全模型：
+
+- **只读诊断命令直接执行**并返回 `{host, command, exit_code, stdout, stderr}`（如 `docker ps -a`、`docker logs`、`ss -tlnp`、`df -h`、`free -m`、`systemctl status`）
+- **风险命令默认拒绝**：命中红线（`kill`/`pkill`、`systemctl stop`、`rm`、`docker down/rm/stop`、`reboot`/`shutdown`、`mkfs`/`dd`、`iptables`/`nft` 修改等）时直接报错拒绝，不执行
+- **`--approve` 执行风险命令**：AI 先向用户展示命令与影响，用户明确确认后才加 `--approve` 执行（审批决策在 AI 编排层，CLI 侧强制拦截兜底）
+- **`--timeout` 超时**：命令执行超时秒数（默认 30，`0` 表示不超时），防止 `docker logs -f`、`tail -f`、`ping` 等不退出命令挂死
+
+### `jxwaf-cli deploy version`（查看本地生成兜底版本）
+
+```
+jxwaf-cli deploy version
+```
+
+查看本地生成兜底用的镜像版本（项目目录 `versions.json`）。部署默认每次从官方 GitHub 获取最新 compose（`--source github`），成功拉取后自动刷新 versions.json；versions.json 仅在降级本地生成（`--source generate`）时使用。详见 [deploy.md](deploy.md)。
+
 ### prof/cloud 完整环境从零搭建顺序
 
 ```
@@ -270,7 +291,7 @@ jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] [-
 3. deploy jlog --version <v> --apply           # jxlog（按需；SOC 报表/日志查询依赖）→ 控制台对接
 ```
 
-- **版本时效**：以上镜像 tag 为编写时官方教程的版本（时点值）。官方发布新版后，到 docs.jxwaf.com 对应版本分站（`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/` → Deployment-Tutorial）确认最新镜像版本与部署要求，用 `--image`/`--nft-image` 等覆盖参数指定新版本
+- **compose 来源**：部署**每次都会获取最新 compose**（`--source github`，降级链：本地拉取 → 服务器 git clone → 本地生成，每次降级输出 `degraded` 提示）；成功拉取后自动刷新 `versions.json`，使本地生成兜底也保持最新；`--source git` 直接服务器 git clone；`--source generate` 强制本地生成。`jxwaf-cli deploy version` 查看本地生成兜底版本；`--image`/`--nft-image` 等覆盖参数仍可单次临时指定。详见 [deploy.md](deploy.md)
 - **单机全栈形态**（控制台/节点/jlog 同一台服务器）：按默认参数顺序部署即可——控制台 8000、节点 80/443、jlog 8877/9000/9004，互不冲突；节点 `--server` 填 `http://<控制台IP>:8000`
 
 ## 典型工作流
@@ -280,4 +301,4 @@ jxwaf-cli deploy remove --host <IP> [--target node|admin|jlog] [--purge-data] [-
 → 误报/漏报则改参数重试(≤3次) → cleanup 清理 → 用户确认 → 生产 --apply
 ```
 
-安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)；日志分析与报表配方见 [analysis.md](analysis.md)。
+自动化部署指南（架构选型/多节点/纳管衔接）见 [deploy.md](deploy.md)；安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)；日志分析与报表配方见 [analysis.md](analysis.md)。

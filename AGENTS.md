@@ -62,6 +62,8 @@ jxwaf-cli verify <用例> --url URL    # 通用流量验证（不动配置）
 jxwaf-cli deploy --host IP --version professional --server URL --waf-auth T [--apply]  # 节点部署（standard 单机全栈无需 --server）
 jxwaf-cli deploy admin|jlog --host IP --version professional|cloud [--apply]  # 控制台/jxlog 部署（prof/cloud 从零搭建）
 jxwaf-cli deploy remove --host IP [--target node|admin|jlog] [--apply]  # 卸载
+jxwaf-cli deploy exec --host IP --cmd "<命令>" [--approve]  # 服务器执行命令（只读直接执行；风险命令需 --approve）
+jxwaf-cli deploy version  # 查看本地生成兜底版本（部署默认从官方 GitHub 拉取 compose，--source github）
 jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|monitor|subaccount|custom|cache|sysconf ...
 ```
 

@@ -1,6 +1,6 @@
 # 防护组件开发规范（component）
 
-> 与节点引擎源码对齐（三版本引擎一致）。本地源码参考（jxwaf-agent 同级仓库）：节点引擎 `../jxwaf_node/Professional/lib/resty/jxwaf/`（request / operator / preprocess / unify_action / iputils / waf.lua）。名单/网站接入等其余模块规范见 [module_dev.md](module_dev.md)，规则编写与名单联动见 [rule_dev.md](rule_dev.md)。本文档未覆盖的边角问题以源码为准。
+> 与节点引擎行为对齐（三版本引擎一致）。名单/网站接入等其余模块规范见 [module_dev.md](module_dev.md)，规则编写与名单联动见 [rule_dev.md](rule_dev.md)。
 
 组件 = 自定义 Lua 检测代码，在 access 阶段**最先执行**（先于名单与所有规则），可独立完成检测与处置，也可设 `ngx.ctx` 变量与规则联动（规则用 `ctx_args` 引用）。
 
@@ -19,7 +19,7 @@ jxwaf-cli generate component --params '{"config":{"name":"...","detail":"...","c
 | `code` | Lua 源码（generate 自动 base64 编码）或 `code_base64`（已编码，二选一） |
 | `conf` | 组件配置（JSON 字符串，按组件协议约定） |
 
-**编码链路（已对齐源码）**：控制台服务端 create/edit 会校验 code 必须是合法 base64 且解码后可 loadstring；DB 中存 base64；节点 `/waf_update` 拿到后 `decode_base64 + loadstring` 编译执行。因此 **code 必须由调用方编码**（generate 已自动处理），明文直传会被服务端拒绝。
+**编码链路**：控制台服务端 create/edit 会校验 code 必须是合法 base64 且解码后可 loadstring；DB 中存 base64；节点 `/waf_update` 拿到后 `decode_base64 + loadstring` 编译执行。因此 **code 必须由调用方编码**（generate 已自动处理），明文直传会被服务端拒绝。
 
 ### 代码模板
 
@@ -117,14 +117,14 @@ local src_ip = request.get_args("http_args", "src_ip")
 local id = request.get_args("uri_args", "id")
 ```
 
-返回类型细节（对齐引擎 request.lua）：
+返回类型细节：
 
 - 多值参数（同名 header/参数多次出现）只取**第一个**；不存在返回 nil
 - `http_args:high_risk_header` 返回 **table**（11 个高风险头键值对），仅供组件内遍历，不要当字符串用
 - `http_args:raw_body` 不触发 read_body，文件型 body 返回 nil
 - `http_args:raw_header` / `raw_header_no_referer` 返回排序后的 JSON 编码字符串（引擎有缓存，可重复调用）
 
-### resty.jxwaf.iputils 精确签名（对齐节点源码）
+### resty.jxwaf.iputils 精确签名
 
 ```lua
 local iputils = require "resty.jxwaf.iputils"
@@ -139,7 +139,7 @@ iputils.ip_in_cidrs(src_ip, cidrs)
 
 **易错点（高危）**：`ip_in_cidrs` 第二参数**必须传 `parse_cidrs` 的返回值（table）**，传逗号分隔字符串会在 ipairs 处抛错，被引擎 pcall 捕获后**组件静默失效（每次请求报错放行）**。
 
-规则运算符 `ip_in_cidr` / `ip_in_cidrs`（match_operator）是 operator.lua 内部实现（自带 split + parse），与组件侧 API 不同名不同参，不要混淆。
+规则运算符 `ip_in_cidr` / `ip_in_cidrs`（match_operator）由引擎内部实现（自带 split + parse），与组件侧 API 不同名不同参，不要混淆。
 
 ### ngx.ctx 引擎变量（组件可交互）
 
@@ -154,7 +154,7 @@ iputils.ip_in_cidrs(src_ip, cidrs)
 
 ### 执行防护动作（统一走 unify_action）
 
-**已对齐引擎源码**：组件内执行动作的正确方式是**直接 require `resty.jxwaf.unify_action` 调用**（与引擎内置模块同款模式）。~~ngx.ctx.jxwaf_protection~~ 变量在引擎中**不存在**，不要使用。
+组件内执行动作的正确方式是**直接 require `resty.jxwaf.unify_action` 调用**（与引擎内置模块同款模式）。~~ngx.ctx.jxwaf_protection~~ 变量在引擎中**不存在**，不要使用。
 
 ```lua
 local unify_action = require "resty.jxwaf.unify_action"

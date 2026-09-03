@@ -74,7 +74,7 @@ jxwaf-cli 对接 JXWAF 标准版 / 专业版 / 云WAF。**版本差异由 CLI ad
 | api_get_* 批量 | api_get_domain_list / api_get_sub_account_list 等 | 节点/服务内部拉取专用，分页 list 已覆盖管理需求 |
 | 节点侧上报 | waf_monitor / sync_network_ip / network_block（节点调用版）/ waf_update / model_update / token_ai_analysis / sync_usage_stat | 由 jxwaf_node 内部调用（body waf_auth 鉴权），非管理面操作；管理侧封禁用 `network create` |
 | 服务间接口 | api_get_pending_cert_tasks 等 4 个 ssl_cert_service 接口 | ssl_cert_service Go 服务专用（IP 白名单鉴权） |
-| 死路由 | edit_soc_network_block_ip / get_soc_network_block_ip | 服务端 access.lua 注册但函数未实现（请求被静默吞掉）；用 edit/get_soc_network_ip 替代 |
+| 死路由 | edit_soc_network_block_ip / get_soc_network_block_ip | 服务端路由已注册但函数未实现（请求被静默吞掉）；用 edit/get_soc_network_ip 替代 |
 | /user 段独有模块 | dns_config 5 个、account_info/edit_password 等 | 子账号自助管理（Cloud user 专属控制台功能），非 Admin API 范畴 |
 
-以本地 `docs/` 为主；与实际行为冲突或拿不准时，字段级规范以 jxwaf_admin_server 仓库各版 `ADMIN_API_DOCUMENT.md` / `USER_API_DOCUMENT.md` 为准，产品语义以 docs.jxwaf.com 各版本产品文档为准。CLI 内部端点映射以各版 `access.lua` 路由表为准。
+以本地 `docs/` 为主；与实际行为冲突或拿不准时，字段级规范与端点映射以 docs.jxwaf.com 各版本官方文档为准。

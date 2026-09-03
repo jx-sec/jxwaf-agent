@@ -101,6 +101,24 @@ func (c *SSHClient) Run(cmd string) RunResult {
 	return RunResult{Cmd: cmd, Stdout: out.String(), Stderr: errBuf.String(), Code: 0}
 }
 
+// RunWithTimeout 在远程执行命令，超过 timeout 后返回超时结果。
+// timeout <= 0 表示无超时。超时后命令可能仍在远端运行，由连接关闭（defer Close）终止。
+func (c *SSHClient) RunWithTimeout(cmd string, timeout time.Duration) RunResult {
+	if timeout <= 0 {
+		return c.Run(cmd)
+	}
+	ch := make(chan RunResult, 1)
+	go func() {
+		ch <- c.Run(cmd)
+	}()
+	select {
+	case r := <-ch:
+		return r
+	case <-time.After(timeout):
+		return RunResult{Cmd: cmd, Code: -1, Stderr: fmt.Sprintf("命令执行超时（%s）", timeout)}
+	}
+}
+
 // RunCheck 执行命令，非零退出码时返回错误（stderr 优先）。
 func (c *SSHClient) RunCheck(cmd string) (string, error) {
 	r := c.Run(cmd)

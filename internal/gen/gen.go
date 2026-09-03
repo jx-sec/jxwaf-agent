@@ -496,8 +496,8 @@ func gFlowRule(gtype, op string, cfg map[string]any, params map[string]any) (*Re
 
 // ---- 全局名单 ----
 
-// nameListActions 为 name_list_action 完整枚举（对齐节点引擎 waf.lua global_name_list 分支；
-// network_block 的 action_value 为封禁秒数，bot_check 为人机识别方式，放行类无需观察）。
+// nameListActions 为 name_list_action 完整枚举：network_block 的 action_value 为封禁秒数，
+// bot_check 为人机识别方式，放行类无需观察。
 var nameListActions = []string{
 	"block", "reject_response", "watch", "bot_check",
 	"all_bypass", "web_bypass", "flow_bypass", "network_block",

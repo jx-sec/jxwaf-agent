@@ -1,6 +1,6 @@
 // Package adapter 屏蔽 JXWAF 三个版本管理 API 的差异：认证头、端点命名与租户修饰。
 //
-// 三个版本的路由表（jxwaf_admin_server 各版 access.lua）核心路径一致，
+// 三个版本的管理 API 路由核心路径一致，
 // 差异呈现为规律的命名修饰：
 //
 //	standard      /admin_api/<suffix>

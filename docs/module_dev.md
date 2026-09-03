@@ -1,6 +1,6 @@
 # 名单 / 网站接入与配置模块规范
 
-> 字段与枚举已对齐控制台与节点引擎源码（三版本引擎一致）。本地源码参考（jxwaf-agent 同级仓库）：节点引擎 `../jxwaf_node/Professional/lib/resty/jxwaf/`（request / operator / preprocess / unify_action / iputils / waf.lua），控制台 `../jxwaf_admin_server/Professional/`。本文档未覆盖的边角问题以源码为准。
+> 字段与枚举已对齐控制台与节点引擎行为（三版本引擎一致）。
 >
 > 防护组件（Lua 开发）已独立为 [component_dev.md](component_dev.md)。
 

@@ -139,7 +139,7 @@ waf_module=web_engine_protection
 
 根因：code 不是合法 base64、或解码后含 LuaJIT 不支持的 Lua 5.2+ 语法，loadstring 编译失败。
 
-排查顺序（对齐引擎源码 `decode_base64 → loadstring → 执行返回 table` 链路）：
+排查顺序（组件加载链路：`decode_base64 → loadstring → 执行返回 table`）：
 
 1. code 是否 base64 编码（`generate` 已自动处理；手拼 API 时易漏）
 2. Lua 5.2+ 语法（完整对照表见 component_dev.md：`& | ~ >> << // goto` 等）

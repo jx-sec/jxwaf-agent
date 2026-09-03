@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jx-sec/jxwaf-agent/internal/deploy"
 	"github.com/spf13/cobra"
@@ -32,9 +33,11 @@ docker-compose.yml（权限 0600），本地不留存任何密码。
   jxwaf-cli deploy [--version ...] [--server URL] ...      部署节点（standard 全栈 / prof/cloud 接入已有控制台）
   jxwaf-cli deploy admin --host IP --version professional|cloud  部署管理控制台（mysql+admin+ssl_cert_service）
   jxwaf-cli deploy jlog --host IP --version professional|cloud     部署 jxlog 日志系统（clickhouse+jxlog）
-  jxwaf-cli deploy remove --host IP [--target node|admin|jlog]     卸载（--purge-data 连数据删）`,
+  jxwaf-cli deploy remove --host IP [--target node|admin|jlog]     卸载（--purge-data 连数据删）
+  jxwaf-cli deploy exec --host IP --cmd "<命令>" [--approve]      在服务器执行命令（只读直接执行；风险命令需 --approve）
+  jxwaf-cli deploy version                                     查看镜像版本配置（versions.json）`,
 	}
-	cmd.AddCommand(newDeployRunCmd(), newDeployAdminCmd(), newDeployJlogCmd(), newDeployRemoveCmd())
+	cmd.AddCommand(newDeployRunCmd(), newDeployAdminCmd(), newDeployJlogCmd(), newDeployRemoveCmd(), newDeployExecCmd(), newDeployVersionCmd())
 	return cmd
 }
 
@@ -55,6 +58,7 @@ func newDeployRunCmd() *cobra.Command {
 		nftImg    string
 		skipChk   bool
 		waitSec   int
+		source    string
 	)
 	cmd := &cobra.Command{
 		Use:   "deploy --host IP --user root --version standard|professional|cloud [--server URL] --waf-auth TOKEN",
@@ -75,6 +79,10 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 			if user == "" {
 				user = "root"
 			}
+			images, err := deploy.LoadVersions()
+			if err != nil {
+				return nil, err
+			}
 			opts := deploy.Options{
 				Host:   host,
 				User:   user,
@@ -89,6 +97,7 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 					WithNFT:   !skipNFT,
 					NodeImage: nodeImg,
 					NFTImage:  nftImg,
+					Images:    images,
 				},
 				SkipPortChk: skipChk,
 				WaitSec:     waitSec,
@@ -111,17 +120,29 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 			}
 
 			apply, _ := cmd.Flags().GetBool("apply")
-			composeYAML, err := deploy.GenerateCompose(opts.Compose)
-			if err != nil {
-				return nil, err
-			}
 
-			// SSH 连接 + 前置检查（只读）
+			// SSH 连接（提前建立：供 git clone 兜底与后续前置检查/部署使用）
 			c, err := deploy.DialSSH(opts.Host, opts.User, opts.SSHKey)
 			if err != nil {
 				return nil, err
 			}
 			defer c.Close()
+
+			composeYAML, composeSource, degraded, err := resolveCompose(
+				c, opts.Compose.Version, "node", source,
+				deploy.InjectParams{
+					WafAuth:       opts.Compose.WafAuth,
+					ServerURL:     opts.Compose.ServerURL,
+					MySQLPassword: opts.Compose.MySQLPassword,
+					HTTPPort:      opts.Compose.HTTPPort,
+					HTTPSPort:     opts.Compose.HTTPSPort,
+					AdminPort:     opts.Compose.AdminPort,
+				},
+				func() (string, error) { return deploy.GenerateCompose(opts.Compose) },
+			)
+			if err != nil {
+				return nil, err
+			}
 
 			if !apply {
 				rep, err := deploy.Preflight(c, opts)
@@ -135,15 +156,21 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 					return out, nil
 				}
 				rep.Applied = false
-				return map[string]any{
-					"dry_run":    true,
-					"report":     rep,
-					"compose":    composeYAML,
-					"compose_at": deploy.ComposePath,
-					"hint":       "预览未执行；确认以上计划与配置后，加 --apply 实际部署（将安装缺失依赖、写入 " + deploy.ComposePath + "、拉起容器）",
-				}, nil
+				out := map[string]any{
+					"dry_run":        true,
+					"report":         rep,
+					"compose":        composeYAML,
+					"compose_source": composeSource,
+					"compose_at":     deploy.ComposePath,
+					"hint":           "预览未执行；确认以上计划与配置后，加 --apply 实际部署（将安装缺失依赖、写入 " + deploy.ComposePath + "、拉起容器）",
+				}
+				if degraded != "" {
+					out["degraded"] = degraded
+				}
+				return out, nil
 			}
 
+			opts.ComposeYAML = composeYAML
 			rep, err := deploy.Deploy(c, opts)
 			if rep != nil {
 				rep.Applied = err == nil
@@ -168,6 +195,7 @@ docker-compose.yml（权限 0600），本地不留存任何密码。`,
 	cmd.Flags().StringVar(&nftImg, "nft-image", "", "覆盖 nft_node 镜像")
 	cmd.Flags().BoolVar(&skipChk, "skip-port-check", false, "跳过端口冲突检查（明确接受占用时使用）")
 	cmd.Flags().IntVar(&waitSec, "wait", 15, "容器启动后等待验证的秒数")
+	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（本地拉取，降级 git clone/本地生成）| git（服务器 git clone）| generate（本地生成）")
 	cmd.Flags().Bool("apply", false, "实际执行部署（默认 dry-run 仅预览计划）")
 	return cmd
 }
@@ -268,6 +296,7 @@ func newDeployAdminCmd() *cobra.Command {
 		adminImg  string
 		sslImg    string
 		waitSec   int
+		source    string
 	)
 	cmd := &cobra.Command{
 		Use:   "admin --host IP --version professional|cloud",
@@ -283,10 +312,14 @@ func newDeployAdminCmd() *cobra.Command {
 			if user == "" {
 				user = "root"
 			}
+			images, err := deploy.LoadVersions()
+			if err != nil {
+				return nil, err
+			}
 			opts := deploy.AdminOptions{
 				Host: host, User: user, SSHKey: sshKey, WaitSec: waitSec,
 				Compose: deploy.AdminComposeParams{
-					Version: version, AdminPort: adminPort, AdminImage: adminImg, SSLCertImage: sslImg,
+					Version: version, AdminPort: adminPort, AdminImage: adminImg, SSLCertImage: sslImg, Images: images,
 				},
 			}
 			if err := deploy.ValidateAdmin(opts); err != nil {
@@ -297,20 +330,31 @@ func newDeployAdminCmd() *cobra.Command {
 				opts.Compose.MySQLPassword = deploy.RandomPassword()
 			}
 
-			composeYAML, err := deploy.GenerateAdminCompose(opts.Compose)
-			if err != nil {
-				return nil, err
-			}
 			c, err := deploy.DialSSH(opts.Host, opts.User, opts.SSHKey)
 			if err != nil {
 				return nil, err
 			}
 			defer c.Close()
 
+			composeYAML, composeSource, degraded, err := resolveCompose(
+				c, opts.Compose.Version, "admin", source,
+				deploy.InjectParams{
+					MySQLPassword: opts.Compose.MySQLPassword,
+					AdminPort:     opts.Compose.EffectiveAdminPort(),
+				},
+				func() (string, error) { return deploy.GenerateAdminCompose(opts.Compose) },
+			)
+			if err != nil {
+				return nil, err
+			}
+
 			apply, _ := cmd.Flags().GetBool("apply")
 			if !apply {
 				rep, err := deploy.PreflightStack(c, opts.Compose.Version, opts.Host, opts.User, deploy.AdminCheckPorts(opts.Compose))
-				out := map[string]any{"dry_run": true, "compose": composeYAML, "compose_at": deploy.AdminComposePath}
+				out := map[string]any{"dry_run": true, "compose": composeYAML, "compose_source": composeSource, "compose_at": deploy.AdminComposePath}
+				if degraded != "" {
+					out["degraded"] = degraded
+				}
 				if rep != nil {
 					rep.Applied = false
 					out["report"] = rep
@@ -325,6 +369,7 @@ func newDeployAdminCmd() *cobra.Command {
 				return out, nil
 			}
 
+			opts.ComposeYAML = composeYAML
 			rep, err := deploy.DeployAdmin(c, opts)
 			if rep != nil {
 				rep.Applied = err == nil
@@ -343,6 +388,7 @@ func newDeployAdminCmd() *cobra.Command {
 	cmd.Flags().StringVar(&adminImg, "image", "", "覆盖控制台镜像")
 	cmd.Flags().StringVar(&sslImg, "ssl-cert-image", "", "覆盖 ssl_cert_service 镜像")
 	cmd.Flags().IntVar(&waitSec, "wait", 20, "容器启动后等待验证的秒数（MySQL 首次初始化较慢）")
+	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（本地拉取，降级 git clone/本地生成）| git（服务器 git clone）| generate（本地生成）")
 	cmd.Flags().Bool("apply", false, "实际执行部署（默认 dry-run 仅预览）")
 	return cmd
 }
@@ -357,6 +403,7 @@ func newDeployJlogCmd() *cobra.Command {
 		jlogImg string
 		chImg   string
 		waitSec int
+		source  string
 	)
 	cmd := &cobra.Command{
 		Use:   "jlog --host IP --version professional|cloud",
@@ -370,15 +417,15 @@ func newDeployJlogCmd() *cobra.Command {
 			if user == "" {
 				user = "root"
 			}
-			opts := deploy.JlogOptions{
-				Host: host, User: user, SSHKey: sshKey, WaitSec: waitSec,
-				Compose: deploy.JlogComposeParams{Version: version, JlogImage: jlogImg, CHImage: chImg},
-			}
-			if err := deploy.ValidateJlog(opts); err != nil {
+			images, err := deploy.LoadVersions()
+			if err != nil {
 				return nil, err
 			}
-			composeYAML, err := deploy.GenerateJlogCompose(opts.Compose)
-			if err != nil {
+			opts := deploy.JlogOptions{
+				Host: host, User: user, SSHKey: sshKey, WaitSec: waitSec,
+				Compose: deploy.JlogComposeParams{Version: version, JlogImage: jlogImg, CHImage: chImg, Images: images},
+			}
+			if err := deploy.ValidateJlog(opts); err != nil {
 				return nil, err
 			}
 			c, err := deploy.DialSSH(opts.Host, opts.User, opts.SSHKey)
@@ -387,10 +434,22 @@ func newDeployJlogCmd() *cobra.Command {
 			}
 			defer c.Close()
 
+			composeYAML, composeSource, degraded, err := resolveCompose(
+				c, opts.Compose.Version, "jlog", source,
+				deploy.InjectParams{},
+				func() (string, error) { return deploy.GenerateJlogCompose(opts.Compose) },
+			)
+			if err != nil {
+				return nil, err
+			}
+
 			apply, _ := cmd.Flags().GetBool("apply")
 			if !apply {
 				rep, err := deploy.PreflightStack(c, opts.Compose.Version, opts.Host, opts.User, deploy.JlogCheckPorts())
-				out := map[string]any{"dry_run": true, "compose": composeYAML, "compose_at": deploy.JlogComposePath}
+				out := map[string]any{"dry_run": true, "compose": composeYAML, "compose_source": composeSource, "compose_at": deploy.JlogComposePath}
+				if degraded != "" {
+					out["degraded"] = degraded
+				}
 				if rep != nil {
 					rep.Applied = false
 					out["report"] = rep
@@ -405,6 +464,7 @@ func newDeployJlogCmd() *cobra.Command {
 				return out, nil
 			}
 
+			opts.ComposeYAML = composeYAML
 			rep, err := deploy.DeployJlog(c, opts)
 			if rep != nil {
 				rep.Applied = err == nil
@@ -422,6 +482,152 @@ func newDeployJlogCmd() *cobra.Command {
 	cmd.Flags().StringVar(&jlogImg, "image", "", "覆盖 jxlog 镜像")
 	cmd.Flags().StringVar(&chImg, "clickhouse-image", "", "覆盖 clickhouse 镜像")
 	cmd.Flags().IntVar(&waitSec, "wait", 15, "容器启动后等待验证的秒数")
+	cmd.Flags().StringVar(&source, "source", "github", "compose 来源：github（本地拉取，降级 git clone/本地生成）| git（服务器 git clone）| generate（本地生成）")
 	cmd.Flags().Bool("apply", false, "实际执行部署（默认 dry-run 仅预览）")
 	return cmd
+}
+
+// newDeployExecCmd 在目标服务器执行命令（AI 自主诊断通道）。
+// 安全模型：只读诊断命令直接执行并返回输出；命中风险红线（kill/stop/rm/down/关机/格式化/防火墙）
+// 的命令默认拒绝，需显式 --approve（表示用户已审批）才执行。
+func newDeployExecCmd() *cobra.Command {
+	var (
+		host       string
+		user       string
+		sshKey     string
+		cmdStr     string
+		approve    bool
+		timeoutSec int
+	)
+	cmd := &cobra.Command{
+		Use:   "exec --host IP --cmd \"<命令>\" [--approve]",
+		Short: "在目标服务器执行命令（只读直接执行；风险命令需 --approve）",
+		Long: `在目标服务器上执行命令，作为 AI 自主诊断的通道。
+
+安全模型：
+  - 只读诊断命令（docker ps/logs、ss -tlnp、df/free、systemctl status 等）直接执行并返回输出
+  - 命中风险红线（kill/pkill、systemctl stop、rm、docker down/rm/stop、重启关机、磁盘格式化、防火墙修改）的命令默认拒绝，需显式 --approve 才执行
+
+审批流程（AI 编排层）：AI 向用户展示风险命令与影响范围 → 用户明确确认 → AI 加 --approve 执行。
+
+注意：命令输出可能含敏感信息（如 docker-compose.yml 含 waf_auth / MySQL 密码），AI 解读时严禁将凭据明文写入对话或文件。`,
+		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
+			if host == "" {
+				return nil, fmt.Errorf("缺少 --host：目标服务器 IP（可带 SSH 端口）")
+			}
+			if cmdStr == "" {
+				return nil, fmt.Errorf("缺少 --cmd：要执行的命令")
+			}
+			if user == "" {
+				user = "root"
+			}
+
+			// 风险判断前置：本地纯判断，风险命令无 --approve 时直接拒绝（不触碰 SSH）
+			risky, reason := deploy.IsRiskyCommand(cmdStr)
+			if risky && !approve {
+				return nil, fmt.Errorf("风险命令被拒绝（%s）：%s。请先向用户展示命令与影响，用户明确确认后加 --approve 执行", reason, cmdStr)
+			}
+
+			if sshKey == "" && os.Getenv("JXWAF_SSH_PASSWORD") == "" {
+				return nil, fmt.Errorf("缺少 SSH 认证：设置环境变量 JXWAF_SSH_PASSWORD（密码）或 --ssh-key <私钥路径>")
+			}
+
+			c, err := deploy.DialSSH(host, user, sshKey)
+			if err != nil {
+				return nil, err
+			}
+			defer c.Close()
+
+			r := c.RunWithTimeout(cmdStr, time.Duration(timeoutSec)*time.Second)
+			return map[string]any{
+				"host":      host,
+				"command":   cmdStr,
+				"risky":     risky,
+				"approved":  approve,
+				"exit_code": r.Code,
+				"stdout":    r.Stdout,
+				"stderr":    r.Stderr,
+			}, nil
+		}),
+	}
+	cmd.Flags().StringVar(&host, "host", "", "目标服务器 IP（可带 SSH 端口，如 1.2.3.4:2222）")
+	cmd.Flags().StringVar(&user, "user", "root", "SSH 用户（需 root 或免密 sudo）")
+	cmd.Flags().StringVar(&sshKey, "ssh-key", "", "SSH 私钥路径（密码认证改用环境变量 JXWAF_SSH_PASSWORD）")
+	cmd.Flags().StringVar(&cmdStr, "cmd", "", "要执行的命令")
+	cmd.Flags().BoolVar(&approve, "approve", false, "已审批执行风险命令（默认拒绝风险命令）")
+	cmd.Flags().IntVar(&timeoutSec, "timeout", 30, "命令执行超时秒数（0 表示不超时）")
+	return cmd
+}
+
+// newDeployVersionCmd 查看当前镜像版本配置（versions.json）。
+func newDeployVersionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "查看镜像版本配置（versions.json）",
+		Long: `查看部署使用的镜像版本配置（项目目录 versions.json）。
+
+镜像版本不再硬编码在代码里，而是外置到 versions.json。官方发布新版后，
+由 AI 从官方 GitHub 仓库（jx-sec/jxwaf）各版本 compose 获取最新镜像 tag，
+更新 versions.json 后重新部署即可（--image/--nft-image 等覆盖参数仍可单次临时指定）。`,
+		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
+			v, err := deploy.LoadVersions()
+			if err != nil {
+				return nil, err
+			}
+			path, _ := deploy.VersionsPath()
+			return map[string]any{
+				"versions_path": path,
+				"versions":      v,
+				"hint":          "镜像版本来源为 versions.json；官方发布新版后，从 GitHub 仓库 jx-sec/jxwaf 各版本 compose 获取最新 tag 更新此文件",
+			}, nil
+		}),
+	}
+	return cmd
+}
+
+// resolveCompose 根据 --source 决定 compose 来源，降级链为：
+//   - "generate"：本地生成（compose.go 模板，版本来自 versions.json）
+//   - "github"（默认）：本地拉取官方 raw → 失败降级服务器 git clone → 再失败降级本地生成
+//   - "git"：服务器 git clone 官方仓库 → 失败降级本地生成
+//
+// c 为已建立的 SSH 连接（用于 git clone 兜底），可为 nil（此时跳过 git clone）。
+// 返回 compose 内容、实际来源（github/git/generate）、降级提示（发生降级时非空）。
+func resolveCompose(c *deploy.SSHClient, version, target, source string, inj deploy.InjectParams, gen func() (string, error)) (string, string, string, error) {
+	if source == "generate" {
+		y, err := gen()
+		return y, "generate", "", err
+	}
+
+	if source == "git" {
+		if c == nil {
+			return "", "", "", fmt.Errorf("--source git 需要已建立的 SSH 连接（用于服务器 git clone）")
+		}
+		gy, gerr := deploy.GitCloneCompose(c, version, target, inj)
+		if gerr == nil {
+			return gy, "git", "", nil
+		}
+		ly, lerr := gen()
+		if lerr != nil {
+			return "", "", "", fmt.Errorf("git clone 失败（%v），本地生成也失败（%v）", gerr, lerr)
+		}
+		return ly, "generate", fmt.Sprintf("git clone 失败（%v），已降级本地生成（镜像版本可能滞后）", gerr), nil
+	}
+
+	// source == "github"（默认）
+	y, err := deploy.FetchCompose(version, target, inj)
+	if err == nil {
+		return y, "github", "", nil
+	}
+	if c != nil {
+		if gy, gerr := deploy.GitCloneCompose(c, version, target, inj); gerr == nil {
+			return gy, "git", fmt.Sprintf("本地拉取官方 compose 失败（%v），已通过服务器 git clone 获取", err), nil
+		} else {
+			err = fmt.Errorf("本地拉取失败（%v），git clone 也失败（%v）", err, gerr)
+		}
+	}
+	ly, lerr := gen()
+	if lerr != nil {
+		return "", "", "", fmt.Errorf("官方 compose 获取失败（%v），本地生成也失败（%v）", err, lerr)
+	}
+	return ly, "generate", fmt.Sprintf("官方 compose 获取失败（%v），已降级本地生成（镜像版本可能滞后于官方）", err), nil
 }

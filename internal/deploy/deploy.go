@@ -14,8 +14,9 @@ type Options struct {
 	User        string // SSH 用户（默认 root）
 	SSHKey      string // SSH 私钥路径（与密码二选一；密码经 JXWAF_SSH_PASSWORD 环境变量）
 	Compose     ComposeParams
-	SkipPortChk bool // 跳过端口冲突检查（用户明确确认占用可忽略时）
-	WaitSec     int  // 部署后等待节点启动的秒数（默认 15）
+	ComposeYAML string // 预生成的 compose 内容（CLI 层已解析，含官方拉取/参数注入；空则内部生成）
+	SkipPortChk bool   // 跳过端口冲突检查（用户明确确认占用可忽略时）
+	WaitSec     int    // 部署后等待节点启动的秒数（默认 15）
 }
 
 // Report 部署执行报告（dry-run 与实际执行共用结构）。
@@ -254,10 +255,14 @@ func Deploy(c *SSHClient, opts Options) (*Report, error) {
 		return rep, err
 	}
 
-	// 5. 生成 compose（0600，含凭据）并拉起验证
-	composeYAML, err := GenerateCompose(opts.Compose)
-	if err != nil {
-		return rep, err
+	// 5. 生成 compose（0600，含凭据）并拉起验证；优先使用 CLI 层预生成的 compose（官方拉取）
+	composeYAML := opts.ComposeYAML
+	if composeYAML == "" {
+		var err error
+		composeYAML, err = GenerateCompose(opts.Compose)
+		if err != nil {
+			return rep, err
+		}
 	}
 	rep, err = runStack(c, rep, ComposePath, composeYAML, opts.WaitSec, "节点")
 	if err != nil {
@@ -286,11 +291,12 @@ func Deploy(c *SSHClient, opts Options) (*Report, error) {
 
 // AdminOptions 控制台部署输入。
 type AdminOptions struct {
-	Host    string
-	User    string
-	SSHKey  string
-	Compose AdminComposeParams
-	WaitSec int
+	Host        string
+	User        string
+	SSHKey      string
+	Compose     AdminComposeParams
+	ComposeYAML string // 预生成的 compose 内容（CLI 层已解析；空则内部生成）
+	WaitSec     int
 }
 
 // ValidateAdmin 校验控制台部署必填参数。
@@ -383,9 +389,13 @@ func DeployAdmin(c *SSHClient, opts AdminOptions) (*Report, error) {
 	if err := ensureDocker(c, rep); err != nil {
 		return rep, err
 	}
-	composeYAML, err := GenerateAdminCompose(opts.Compose)
-	if err != nil {
-		return rep, err
+	composeYAML := opts.ComposeYAML
+	if composeYAML == "" {
+		var err error
+		composeYAML, err = GenerateAdminCompose(opts.Compose)
+		if err != nil {
+			return rep, err
+		}
 	}
 	rep, err = runStack(c, rep, AdminComposePath, composeYAML, opts.WaitSec, "控制台")
 	if err != nil {
@@ -400,11 +410,12 @@ func DeployAdmin(c *SSHClient, opts AdminOptions) (*Report, error) {
 
 // JlogOptions jxlog 部署输入。
 type JlogOptions struct {
-	Host    string
-	User    string
-	SSHKey  string
-	Compose JlogComposeParams
-	WaitSec int
+	Host        string
+	User        string
+	SSHKey      string
+	Compose     JlogComposeParams
+	ComposeYAML string // 预生成的 compose 内容（CLI 层已解析；空则内部生成）
+	WaitSec     int
 }
 
 // ValidateJlog 校验 jxlog 部署必填参数。
@@ -430,9 +441,13 @@ func DeployJlog(c *SSHClient, opts JlogOptions) (*Report, error) {
 	if err := ensureDocker(c, rep); err != nil {
 		return rep, err
 	}
-	composeYAML, err := GenerateJlogCompose(opts.Compose)
-	if err != nil {
-		return rep, err
+	composeYAML := opts.ComposeYAML
+	if composeYAML == "" {
+		var err error
+		composeYAML, err = GenerateJlogCompose(opts.Compose)
+		if err != nil {
+			return rep, err
+		}
 	}
 	rep, err = runStack(c, rep, JlogComposePath, composeYAML, opts.WaitSec, "jxlog")
 	if err != nil {

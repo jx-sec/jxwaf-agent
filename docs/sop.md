@@ -52,7 +52,7 @@
 
 官方测试环境用独立命令组 `test`（verify/cleanup/reset），与自有环境命令隔离；自有环境验证用通用 `verify --url`（只发流量不动配置）。官方兜底每日 `test reset --apply`。
 
-**文档优先级**：以本地 `docs/` 为主。当本地文档与线上行为有冲突或错误、或拿不准的字段时，再到 **docs.jxwaf.com** 获取最新（按版本分站：`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/`；部署类看各站 `Deployment-Tutorial`，字段规范以各版 `ADMIN_API_DOCUMENT.md` 为准），以官方为准。
+**文档优先级**：以本地 `docs/` 为主。当本地文档与线上行为有冲突或错误、或拿不准的字段时，再到 **docs.jxwaf.com** 获取最新（按版本分站：`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/`；部署类看各站 `Deployment-Tutorial`），以官方为准。
 
 ## 异常处理
 

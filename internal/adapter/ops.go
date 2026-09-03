@@ -1,7 +1,7 @@
 package adapter
 
 // Op 逻辑操作名：命令层使用的、与版本无关的统一操作集合。
-// opSpecs 中 suffix 与三版路由表（jxwaf_admin_server 各版 access.lua）逐条一致。
+// opSpecs 中 suffix 与三版管理 API 路由逐条一致。
 
 type Op string
 

@@ -19,26 +19,8 @@ func ValidVersion(v string) bool {
 	return v == VersionStandard || v == VersionProfessional || v == VersionCloud
 }
 
-// 镜像常量（对齐 docs.jxwaf.com 各版部署教程的正式版本；可用 --image / --nft-image 覆盖）：
-// professional/cloud 为"节点接入已有控制台"形态；standard 为单机全栈（控制台+节点+MySQL+日志采集）。
-const (
-	defaultProfNodeImage  = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_node_professional:6.1.0"
-	defaultCloudNodeImage = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_node_cloud:6.2.1"
-	defaultStdNodeImage   = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_node_standard:6.1.7"
-	defaultStdAdminImage  = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_admin_server_standard:6.1.14"
-	defaultStdLogImage    = "ccr.ccs.tencentyun.com/jxwaf/log_send_to_mysql:v2"
-	defaultMySQLImage     = "ccr.ccs.tencentyun.com/jxwaf/mysql:8.0"
-	defaultNFTImage       = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_nft_node:6.0"
-	defaultStdNFTImage    = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_nft_node:7.0"
-
-	// 控制台与日志系统（prof/cloud 分离部署形态，对齐官方教程与仓库 compose）
-	defaultProfAdminImage = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_admin_server_professional:6.1.0"
-	defaultCloudAdminImg  = "ccr.ccs.tencentyun.com/jxwaf/jxwaf_admin_server_cloud:6.2.1"
-	defaultSSLCertImage   = "ccr.ccs.tencentyun.com/jxwaf/ssl_cert_service:6.2.2"
-	defaultClickhouseImg  = "ccr.ccs.tencentyun.com/jxwaf/clickhouse-server:22.8.5-alpine"
-	defaultJlogProfImage  = "ccr.ccs.tencentyun.com/jxwaf/jxlog_professional:1.0"
-	defaultJlogCloudImage = "ccr.ccs.tencentyun.com/jxwaf/jxlog_cloud:1.0"
-)
+// 镜像版本不再硬编码在代码里：统一从 versions.json（Versions）读取，
+// 由 AI 从官方 GitHub 仓库（jx-sec/jxwaf）各版本 compose 获取最新 tag 后更新。
 
 // RemoteStacks 各组件的远程部署目录（分目录隔离，单独 remove 时互不影响）。
 const (
@@ -56,13 +38,6 @@ const AdminComposePath = AdminRemoteDir + "/docker-compose.yml"
 // JlogComposePath 远程 compose 文件路径（jxlog）。
 const JlogComposePath = JlogRemoteDir + "/docker-compose.yml"
 
-// defaultNodeImages 各版本 WAF 节点默认镜像。
-var defaultNodeImages = map[string]string{
-	VersionStandard:     defaultStdNodeImage,
-	VersionProfessional: defaultProfNodeImage,
-	VersionCloud:        defaultCloudNodeImage,
-}
-
 // ComposeParams 生成 docker-compose.yml 的参数。
 type ComposeParams struct {
 	Version   string // standard / professional / cloud
@@ -70,9 +45,10 @@ type ComposeParams struct {
 	WafAuth   string // 节点接入凭据（standard 版为自设的 WAF_AUTH，控制台与节点一致）
 	HTTPPort  string // HTTP 监听端口（多端口逗号分隔）
 	HTTPSPort string // HTTPS 监听端口（多端口逗号分隔）
-	WithNFT   bool   // 是否部署 jxwaf_nft_node（standard/professional/cloud 均支持）
-	NodeImage string // 覆盖 WAF 节点镜像（空用默认）
-	NFTImage  string // 覆盖 nft_node 镜像（空用默认）
+	WithNFT   bool     // 是否部署 jxwaf_nft_node（standard/professional/cloud 均支持）
+	NodeImage string   // 覆盖 WAF 节点镜像（空用默认）
+	NFTImage  string   // 覆盖 nft_node 镜像（空用默认）
+	Images    Versions // 镜像版本来源（versions.json）
 
 	// 仅 standard（单机全栈）：
 	AdminPort     string // 控制台 HTTP 端口（默认 8000）
@@ -84,7 +60,7 @@ func (p ComposeParams) EffectiveNodeImage() string {
 	if p.NodeImage != "" {
 		return p.NodeImage
 	}
-	return defaultNodeImages[p.Version]
+	return p.Images.Stack(p.Version).Node
 }
 
 // EffectiveNFTImage 返回生效的 nft_node 镜像。
@@ -92,10 +68,7 @@ func (p ComposeParams) EffectiveNFTImage() string {
 	if p.NFTImage != "" {
 		return p.NFTImage
 	}
-	if p.Version == VersionStandard {
-		return defaultStdNFTImage
-	}
-	return defaultNFTImage
+	return p.Images.Stack(p.Version).NFT
 }
 
 // NormalizeServerURL 规范化管理端地址：去尾部斜杠（官方要求末尾不带 /）。
@@ -121,6 +94,9 @@ func RandomPassword() string {
 // professional/cloud：节点接入已有控制台（对齐官方教程"节点部署"章节）；
 // standard：单机全栈（mysql + 控制台 + 节点 + 日志采集 + nft_node，对齐官方"一键部署"）。
 func GenerateCompose(p ComposeParams) (string, error) {
+	if p.Images.IsZero() {
+		p.Images = DefaultVersions()
+	}
 	if !ValidVersion(p.Version) {
 		return "", fmt.Errorf("未知节点版本 %q（standard/professional/cloud）", p.Version)
 	}
@@ -206,7 +182,7 @@ func generateStandardCompose(p ComposeParams) (string, error) {
 
 	// ---- mysql_db ----
 	b.WriteString("  mysql_db:\n")
-	fmt.Fprintf(&b, "    image: %s\n", defaultMySQLImage)
+	fmt.Fprintf(&b, "    image: %s\n", p.Images.MySQL)
 	b.WriteString("    restart: always\n    network_mode: host\n    environment:\n")
 	fmt.Fprintf(&b, "      MYSQL_ROOT_PASSWORD: %s\n", p.MySQLPassword)
 	b.WriteString("      MYSQL_CHARSET: utf8mb4\n      MYSQL_COLLATION: utf8mb4_0900_ai_ci\n")
@@ -223,7 +199,7 @@ func generateStandardCompose(p ComposeParams) (string, error) {
 
 	// ---- jxwaf_admin_server（控制台） ----
 	b.WriteString("\n  jxwaf_admin_server:\n")
-	fmt.Fprintf(&b, "    image: %s\n", defaultStdAdminImage)
+	fmt.Fprintf(&b, "    image: %s\n", p.Images.Standard.Admin)
 	b.WriteString("    restart: unless-stopped\n    network_mode: host\n    depends_on:\n      - mysql_db\n")
 	b.WriteString("    environment:\n")
 	b.WriteString("      MYSQL_HOST: 127.0.0.1\n      MYSQL_PORT: 3306\n")
@@ -256,7 +232,7 @@ func generateStandardCompose(p ComposeParams) (string, error) {
 
 	// ---- log_send_to_mysql（日志采集） ----
 	b.WriteString("\n  log_send_to_mysql:\n")
-	fmt.Fprintf(&b, "    image: %s\n", defaultStdLogImage)
+	fmt.Fprintf(&b, "    image: %s\n", p.Images.LogSendToMySQL)
 	b.WriteString("    container_name: data_send_to_mysql\n    network_mode: host\n    depends_on:\n      - mysql_db\n")
 	b.WriteString("    environment:\n      LISTEN_ADDR: \":12997\"\n      BATCH_SIZE: \"50\"\n      BATCH_WAIT_TIMEOUT: \"2s\"\n")
 	b.WriteString("      MAX_CONNECTIONS: \"1000\"\n      MAX_IDLE_CONNS: \"10\"\n      CONN_MAX_LIFETIME: \"10m\"\n")
@@ -299,8 +275,9 @@ type AdminComposeParams struct {
 	Version       string // professional / cloud（standard 为单机全栈，走 deploy 主体，不适用此处）
 	AdminPort     string // 控制台 HTTP 端口（默认 8000；分机部署需控制台独占 80 时显式指定）
 	MySQLPassword string // MySQL root 密码；空则自动生成（只写入远端 compose，不回显）
-	AdminImage    string // 覆盖控制台镜像
-	SSLCertImage  string // 覆盖 ssl_cert_service 镜像
+	AdminImage    string   // 覆盖控制台镜像
+	SSLCertImage  string   // 覆盖 ssl_cert_service 镜像
+	Images        Versions // 镜像版本来源（versions.json）
 }
 
 // EffectiveAdminImage 返回生效的控制台镜像。
@@ -308,10 +285,7 @@ func (p AdminComposeParams) EffectiveAdminImage() string {
 	if p.AdminImage != "" {
 		return p.AdminImage
 	}
-	if p.Version == VersionCloud {
-		return defaultCloudAdminImg
-	}
-	return defaultProfAdminImage
+	return p.Images.Stack(p.Version).Admin
 }
 
 // EffectiveAdminPort 返回生效的控制台端口（默认 8000，各版本一致，对齐官方教程 cloud 形态）。
@@ -336,6 +310,9 @@ func (p AdminComposeParams) mysqlDataDir() string {
 // mysql_db + jxwaf_admin_server + ssl_cert_service（泛域名证书自动签发/续期）。
 // cloud 版必须开 USER_API_ENABLE（用户控制台依赖）；AI 模型服务地址按官方文档各版本配置。
 func GenerateAdminCompose(p AdminComposeParams) (string, error) {
+	if p.Images.IsZero() {
+		p.Images = DefaultVersions()
+	}
 	if p.Version != VersionProfessional && p.Version != VersionCloud {
 		return "", fmt.Errorf("控制台部署仅支持 professional/cloud（standard 为单机全栈，直接用 deploy 主体）")
 	}
@@ -350,7 +327,7 @@ func GenerateAdminCompose(p AdminComposeParams) (string, error) {
 
 	// ---- mysql_db ----
 	b.WriteString("  mysql_db:\n")
-	fmt.Fprintf(&b, "    image: %s\n", defaultMySQLImage)
+	fmt.Fprintf(&b, "    image: %s\n", p.Images.MySQL)
 	b.WriteString("    restart: always\n    network_mode: host\n    environment:\n")
 	fmt.Fprintf(&b, "      MYSQL_ROOT_PASSWORD: %s\n", p.MySQLPassword)
 	b.WriteString("      MYSQL_CHARSET: utf8mb4\n      MYSQL_COLLATION: utf8mb4_0900_ai_ci\n")
@@ -392,7 +369,7 @@ func GenerateAdminCompose(p AdminComposeParams) (string, error) {
 	// ---- ssl_cert_service（泛域名证书自动签发/续期，两版均含）----
 	sslImage := p.SSLCertImage
 	if sslImage == "" {
-		sslImage = defaultSSLCertImage
+		sslImage = p.Images.SSLCertService
 	}
 	b.WriteString("\n  ssl_cert_service:\n")
 	fmt.Fprintf(&b, "    image: %s\n", sslImage)
@@ -417,9 +394,10 @@ func AdminCheckPorts(p AdminComposeParams) []string {
 
 // JlogComposeParams jxlog 部署参数。
 type JlogComposeParams struct {
-	Version   string // professional / cloud
-	JlogImage string // 覆盖 jxlog 镜像
-	CHImage   string // 覆盖 clickhouse 镜像
+	Version   string   // professional / cloud
+	JlogImage string   // 覆盖 jxlog 镜像
+	CHImage   string   // 覆盖 clickhouse 镜像
+	Images    Versions // 镜像版本来源（versions.json）
 }
 
 // EffectiveJlogImage 返回生效的 jxlog 镜像（按版本）。
@@ -427,10 +405,7 @@ func (p JlogComposeParams) EffectiveJlogImage() string {
 	if p.JlogImage != "" {
 		return p.JlogImage
 	}
-	if p.Version == VersionCloud {
-		return defaultJlogCloudImage
-	}
-	return defaultJlogProfImage
+	return p.Images.Stack(p.Version).Jlog
 }
 
 // EffectiveCHImage 返回生效的 clickhouse 镜像。
@@ -438,13 +413,16 @@ func (p JlogComposeParams) EffectiveCHImage() string {
 	if p.CHImage != "" {
 		return p.CHImage
 	}
-	return defaultClickhouseImg
+	return p.Images.Clickhouse
 }
 
 // GenerateJlogCompose 生成 jxlog 日志系统 compose（对齐仓库各版 jxlog/docker-compose.yml：
 // bridge 网络 + 固定内网 IP；两版仅 jxlog 镜像名不同）。
 // 部署后需在控制台"系统配置→日志传输配置/日志查询配置"指向本服务。
 func GenerateJlogCompose(p JlogComposeParams) (string, error) {
+	if p.Images.IsZero() {
+		p.Images = DefaultVersions()
+	}
 	if p.Version != VersionProfessional && p.Version != VersionCloud {
 		return "", fmt.Errorf("jxlog 部署仅支持 professional/cloud（standard 日志走 MySQL，已含在全栈中）")
 	}
