@@ -795,8 +795,8 @@ func gDomain(gtype, op string, cfg map[string]any, params map[string]any) (*Resu
 	// 服务端 check_param 无条件要求以下字段存在（detail 为域名描述）；
 	// ssl_domain / source_https_port 在 https=true 时需非空，false 时输出空串占位（键必须存在）。
 	required := []string{"domain", "detail", "http", "https", "source_ip",
-		"source_http_port", "origin_protocol", "balance_type",
-		"pre_proxy", "real_ip_conf", "connect_timeout", "send_timeout", "read_timeout"}
+		"source_http_port", "origin_protocol",
+		"pre_proxy", "connect_timeout", "send_timeout", "read_timeout"}
 	config := map[string]any{}
 	for _, f := range required {
 		var val string
@@ -805,6 +805,15 @@ func gDomain(gtype, op string, cfg map[string]any, params map[string]any) (*Resu
 		} else {
 			val, err = asStr(cfg[f], true, f)
 		}
+		if err != nil {
+			return nil, err
+		}
+		config[f] = val
+	}
+	// balance_type / real_ip_conf 键必须存在但默认不配置（空串 = 不指定），
+	// 除非用户主动指定；非空时仍按枚举校验。
+	for _, f := range []string{"balance_type", "real_ip_conf"} {
+		val, err := asStr(cfg[f], false, f)
 		if err != nil {
 			return nil, err
 		}
@@ -841,11 +850,15 @@ func gDomain(gtype, op string, cfg map[string]any, params map[string]any) (*Resu
 	if err := oneOf(mustStr(config["origin_protocol"]), "origin_protocol", "http", "https", "follow"); err != nil {
 		return nil, err
 	}
-	if err := oneOf(mustStr(config["balance_type"]), "balance_type", "round_robin", "ip_hash"); err != nil {
-		return nil, err
+	if bt := mustStr(config["balance_type"]); bt != "" {
+		if err := oneOf(bt, "balance_type", "round_robin", "ip_hash"); err != nil {
+			return nil, err
+		}
 	}
-	if err := oneOf(mustStr(config["real_ip_conf"]), "real_ip_conf", "XRI", "XFF"); err != nil {
-		return nil, err
+	if ric := mustStr(config["real_ip_conf"]); ric != "" {
+		if err := oneOf(ric, "real_ip_conf", "XRI", "XFF"); err != nil {
+			return nil, err
+		}
 	}
 	testCases, err := extractTestCases(params, "", "domain")
 	if err != nil {

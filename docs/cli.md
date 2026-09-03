@@ -86,7 +86,7 @@ jxwaf-cli generate web-rule --params /tmp/p.json [--output /tmp/cfg.json]
 - `--params`：JSON 文件路径、`-`（stdin）或内联 JSON，含 `config` 与可选 `test_cases` 两节
 - 输出：`type`、`op`、`config`（规范化请求体）、`preview`（语义摘要，用于向用户展示）、`test_cases`
 - `--output`：落盘信封 `{type, op, config, test_cases}`（供 `apply`/`verify` 使用）
-- 未指定 `rule_action` 时默认 `watch`（观察优先红线）
+- 未指定 `rule_action` 时默认 `watch`（生产保守红线）；**测试环境验证拦截类规则请显式指定 `block`**（见 [verify.md](verify.md)）
 
 字段与校验规范见 [rule_dev.md](rule_dev.md)、[module_dev.md](module_dev.md)、[component_dev.md](component_dev.md)。
 

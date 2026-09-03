@@ -8,6 +8,7 @@
 
 - **攻击用例**：携带要拦截的特征载荷（如 `?id=1 union select 1`），`expect=block`
 - **正常用例**：同路径正常参数，`expect=pass`，用于暴露误报
+- **拦截类规则测试环境直接用 `block` 动作**：测试环境无真实业务，无需 watch 观察，block 才能通过状态码（403/444）直观验证拦截效果；watch 仅用于生产首发观察场景（判读方式见下表）
 
 用例随 `generate` 参数传入（params 中 `test_cases` 数组），`generate --output` 会落盘到信封文件。
 

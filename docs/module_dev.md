@@ -78,9 +78,9 @@ jxwaf-cli namelist item-del --params '{"name_list_name":"malicious_ip","name_lis
 | `source_ip` | 回源地址数组（必填；IP 或域名，域名自动 DNS 解析） |
 | `source_http_port` / `source_https_port` | 回源端口（正整数，默认 80/443；https 未显式指定时 **443**，不允许留空） |
 | `origin_protocol` | `http`/`https`/`follow` |
-| `balance_type` | `round_robin`/`ip_hash` |
+| `balance_type` | `round_robin`/`ip_hash`；**默认不配置（空串），除非用户主动指定** |
 | `pre_proxy` | 前置代理 `"true"`/`"false"` |
-| `real_ip_conf` | 真实 IP 头：`XRI`（X-Real-IP）/`XFF` |
+| `real_ip_conf` | 真实 IP 头：`XRI`（X-Real-IP）/`XFF`；**默认不配置（空串），除非用户主动指定**（仅前置代理场景需要） |
 | `connect_timeout` / `send_timeout` / `read_timeout` | 超时（秒，正整数） |
 
 租户参数自动注入：专业版自动带 `group_name`，云WAF 主账号自动带 `sub_user_name`（域名类虽路径无中缀但 body 必带），无需手写。

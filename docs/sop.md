@@ -24,7 +24,7 @@
 
 ## 核心红线
 
-1. **观察优先**：新增拦截类规则默认 `watch`，测试验证无误报后转 `block`；放行类（白名单/bypass）无需观察；紧急防护经用户确认后可直接 block
+1. **观察优先**：测试环境验证拦截类规则直接用 `block`（测试环境无真实业务，watch 不拦截无法直观验证）；生产环境首发建议 `watch` 观察无误报后转 `block`；放行类（白名单/bypass）无需观察；紧急防护经用户确认后可直接 block
 2. **LuaJIT 兼容**（组件）：禁止 Lua 5.2+ 语法；`code` 由 generate 自动 Base64；组件内禁止 pcall
 3. **网站接入**：回源地址必填；HTTPS 证书与域名必须匹配
 4. **JSON 字符串字段**：`rule_matchs`、`entity`、`name_list_rule`、`source_ip` 等复杂字段统一由 generate 转换为 JSON 字符串（agent 只给语义数组），不要手拼字符串

@@ -1,6 +1,6 @@
 # 实战防护方案库（已验证模式）
 
-> 可直接复用的配置模式。所有 JSON 为 `generate --params` 入参格式，拦截类按红线默认 watch，验证无误报后改 block。字段规范见 [rule_dev.md](rule_dev.md) / [module_dev.md](module_dev.md)，组件红线见 [component_dev.md](component_dev.md)。
+> 可直接复用的配置模式。所有 JSON 为 `generate --params` 入参格式，拦截类测试环境直接用 block 验证，生产首发如需保守可先 watch 观察再转 block。字段规范见 [rule_dev.md](rule_dev.md) / [module_dev.md](module_dev.md)，组件红线见 [component_dev.md](component_dev.md)。
 
 ## 1. Log4j JNDI 注入（CVE-2021-44228，4 条规则分层防御）
 
@@ -24,7 +24,7 @@ jxwaf-cli generate web-rule --params '{
       "match_operator": "rx",
       "match_value": "\\$\\{[^}]*jndi:|jndi:(ldap|rmi|dns|ldaps|iiop|corba|nis|http)://"
     }],
-    "rule_action": "watch"
+    "rule_action": "block"
   }
 }'
 ```
@@ -230,7 +230,7 @@ return _M
       "match_operator": "status_check",
       "match_value": "exist"
     }],
-    "rule_action": "watch"
+    "rule_action": "block"
   }
 }
 ```
@@ -294,6 +294,6 @@ jxwaf-cli namelist item-del --params '{"name_list_name":"block_malicious_ip","na
 
 ## 案例复用注意
 
-1. 所有拦截类先 `watch` 下发 → `test verify` 验证 → 无误报改 block 再下发生产
+1. 拦截类规则测试环境直接用 `block` 下发 → `test verify` 验证（watch 不拦截，测试环境无真实业务无需观察）→ 无误报再下发生产；生产首发如需保守可先 `watch` 观察再转 `block`
 2. 组件案例下发前确认：conf 字段类型（数值 tonumber）、key 前缀已拼项目名、TTL 全覆盖
 3. 阈值类参数（exceed_count / threshold）按业务峰值调整，参考 [playbook.md](playbook.md) PV 限速建议表

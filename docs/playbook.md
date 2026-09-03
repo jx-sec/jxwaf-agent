@@ -90,7 +90,7 @@ waf_module=web_engine_protection
 1. 精确匹配优先：str_eq > str_contain，str_prefix > rx（正则慢 10-100 倍）
 2. 字符串运算符大小写敏感：关键字匹配加 `lowerCase` 预处理，match_value 统一小写
 3. 多层解码按需叠加：uriDecode / base64Decode / uniDecode / hexDecode（攻击载荷常见混淆）
-4. 观察先行：新规则先 watch，SOC 日志观察无误报后改 block
+4. 观察先行：生产新规则可先 watch，SOC 日志观察无误报后改 block（测试环境验证直接用 block）
 5. raw_body 限制：仅返回内存中 body，大 body（文件上传）可能为 nil → 用 post_args/json_post_args 替代
 
 ### 流量防护规则
