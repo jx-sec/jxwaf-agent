@@ -42,6 +42,9 @@ func newConfigShowCmd() *cobra.Command {
 				"test_env":  c.TestName(),
 				"environments": masked,
 			}
+			if c.Hub != nil {
+				out["hub"] = c.Hub.Masked()
+			}
 			return out, nil
 		}),
 	}

@@ -52,11 +52,36 @@ func (e Environment) ValidMode() bool {
 	return false
 }
 
+// DefaultHubBaseURL hub.jxwaf.com 策略共享平台默认地址（公开非凭据）。
+const DefaultHubBaseURL = "https://hub.jxwaf.com"
+
+// HubConfig 策略共享平台（JXWAF Hub，策略地址）接入配置。
+// 认证使用用户级 API Token（请求头 jxwaf-api-key），由 hub login 用账号密码一次性换取，密码不落盘。
+type HubConfig struct {
+	BaseURL        string `json:"base_url"`                  // 平台地址（默认 https://hub.jxwaf.com）
+	APIToken       string `json:"api_token,omitempty"`       // 用户 API Token（凭据，脱敏存储）
+	DefaultProduct string `json:"default_product,omitempty"` // push 默认产品：jxwaf/webtds（默认 jxwaf）
+	DefaultScene   string `json:"default_scene,omitempty"`   // push 默认分类（默认 应用安全）
+}
+
+// Masked 返回脱敏副本：api_token 仅保留前 4 位。
+func (h HubConfig) Masked() HubConfig {
+	if h.APIToken != "" {
+		if len(h.APIToken) <= 4 {
+			h.APIToken = "******"
+		} else {
+			h.APIToken = h.APIToken[:4] + "******"
+		}
+	}
+	return h
+}
+
 // Config 本地配置（项目目录 config.json，权限 0600）。
 type Config struct {
 	Active       string                 `json:"active"`
 	TestEnv   string                 `json:"test_env,omitempty"` // 官方测试环境名（test 命令组专用）
 	Environments map[string]Environment `json:"environments"`
+	Hub          *HubConfig             `json:"hub,omitempty"` // 策略共享平台（hub 命令组）
 }
 
 // 官方测试环境内置默认值（开箱即用）：专业版固定共享账号 + 官方预置设施。
