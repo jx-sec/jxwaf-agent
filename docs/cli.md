@@ -220,6 +220,23 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 - **分类由调用方按策略类型显式传 `--scene`**（如缓存/限频/CC 类=流量安全，Web 攻击规则=应用安全，组件=功能组件），CLI 不做内容推断；`login/init` 设置的默认值仅作兜底
 - **Token 缺失引导**：hub 未配置时命令报错并提示 `hub login`（账号密码换 Token，密码不落盘）或 `hub init --token`（Hub 网页「个人设置」页复制 Token，或环境变量 `JXWAF_HUB_TOKEN`）；配置一次后长期有效，网页端重新生成 Token 后需重新配置
 - `pull` 的 `--product` 必须与策略 product 匹配，否则平台返回 400
+- `push` 的文件仅含策略业务字段（如规则的 `rule_name/rule_matchs/rule_action`），不含 `test_cases` 与租户参数（group_name 等由拉取方环境注入）
+
+### Hub 策略文档（readme）模版
+
+`hub push --readme` 附带的说明文档统一按以下章节结构生成（示例见 Hub 策略 `test/block_crawler_ua`）。本模版为内部约定，模版说明本身不写入 readme：
+
+| 章节 | 内容要求 |
+|---|---|
+| 规则作用 | 一句话说明防护目标与动作效果 |
+| 防护范围 | 分类明细表，列全覆盖特征 |
+| 匹配逻辑 | 拆解匹配条件/正则分支，说明锚定与大小写语义，指出防护边界（如绕过面） |
+| 如何加载到你的 WAF | **方式一固定为 jxwaf-agent 拉取并发布**（含示例话术与 AI 闭环步骤：hub pull → dry-run 预览 → 人工确认 → --apply → 可选流量验证）；方式二控制台 Hub 加载（hub-load）；方式三控制台手工粘贴（字段对照表 + 完整原文） |
+| 加载后验证 | 可直接复制执行的验证命令 + SOC 日志过滤字段 + 生效时延说明 |
+| 使用建议与注意事项 | 误报风险、SEO/业务影响、观察上线建议、白名单配合方式 |
+| 验证记录 | 测试环境用例数与通过情况 |
+
+拉取方加载入口（文档中方式一的标准写法）：用户在 IDE 中对 AI 说「从 Hub 拉取 {username}/{name} 策略，发布到我的 WAF」，AI 执行 `hub pull` → `rule web create --params`（dry-run）→ 用户确认 → `--apply`。
 
 ## 典型工作流
 
