@@ -21,6 +21,34 @@ var (
 	hubNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$`)
 )
 
+// validateHubPolicyContent 校验策略内容为控制台 hub-load 可消费的包装结构：
+// {"<资源>_data": {"<名称>": {配置字段...}}}（对齐三版本 admin_server load_*_hub_config 读取 res_body['xxx_data'] 的行为）。
+// 扁平单规则对象（如直接放 rule_name/rule_matchs）会导致控制台加载报 "<xxx>_data is nil"，本地快速失败并给出修正指引。
+func validateHubPolicyContent(data []byte) error {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("策略内容需为 JSON 对象（控制台 hub-load 要求 {\"<资源>_data\": {\"<名称>\": {...}}} 包装结构）: %w", err)
+	}
+	for k, v := range obj {
+		if !strings.HasSuffix(k, "_data") {
+			continue
+		}
+		var inner map[string]json.RawMessage
+		if err := json.Unmarshal(v, &inner); err != nil || len(inner) == 0 {
+			return fmt.Errorf("包装键 %s 的值需为非空的 {\"名称\": {配置}} 对象", k)
+		}
+		for item, cfg := range inner {
+			var cfgObj map[string]json.RawMessage
+			if err := json.Unmarshal(cfg, &cfgObj); err != nil {
+				return fmt.Errorf("包装键 %s 下的 %s 需为配置对象（控制台导出格式：{\"名称\": {字段...}}）", k, item)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("策略内容缺少控制台 hub-load 包装键（*_data，如 web_rule_protection_data/flow_rule_protection_data/component_data）；" +
+		"扁平单规则对象会导致控制台加载报 \"..._data is nil\"，请改用 {\"<资源>_data\":{\"<名称>\":{...}}} 结构（参考控制台导出规则功能）")
+}
+
 // resolveHub 加载配置并返回已认证的 Hub 客户端（要求已完成 hub login/init）。
 func resolveHub() (*client.HubClient, *config.HubConfig, error) {
 	c, err := config.Load()
@@ -286,6 +314,9 @@ func newHubPushCmd() *cobra.Command {
 			}
 			if !json.Valid(data) {
 				return nil, fmt.Errorf("策略文件不是合法 JSON")
+			}
+			if err := validateHubPolicyContent(data); err != nil {
+				return nil, err
 			}
 			jsonContent := string(data)
 			readme := ""

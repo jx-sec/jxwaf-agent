@@ -220,7 +220,7 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 - **分类由调用方按策略类型显式传 `--scene`**（如缓存/限频/CC 类=流量安全，Web 攻击规则=应用安全，组件=功能组件），CLI 不做内容推断；`login/init` 设置的默认值仅作兜底
 - **Token 缺失引导**：hub 未配置时命令报错并提示 `hub login`（账号密码换 Token，密码不落盘）或 `hub init --token`（Hub 网页「个人设置」页复制 Token，或环境变量 `JXWAF_HUB_TOKEN`）；配置一次后长期有效，网页端重新生成 Token 后需重新配置
 - `pull` 的 `--product` 必须与策略 product 匹配，否则平台返回 400
-- `push` 的文件仅含策略业务字段（如规则的 `rule_name/rule_matchs/rule_action`），不含 `test_cases` 与租户参数（group_name 等由拉取方环境注入）
+- `push` 的策略文件**必须**是控制台 hub-load 可消费的包装结构 `{"<资源>_data": {"<名称>": {配置字段...}}}`（如 `web_rule_protection_data`/`flow_rule_protection_data`/`component_data`/`global_name_list_data` 等，键名对齐各版本控制台 `load_*_hub_config` 读取的 `res_body['xxx_data']`），不含 `test_cases` 与租户参数（group_name 等由拉取方环境注入）。**扁平单规则对象会导致控制台「导入远程规则」报 `..._data is nil`**——`hub push` 已本地校验该结构，不符合直接报错拒绝上传
 
 ### Hub 策略文档（readme）模版
 
@@ -231,7 +231,8 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 | 规则作用 | 一句话说明防护目标与动作效果 |
 | 防护范围 | 分类明细表，列全覆盖特征 |
 | 匹配逻辑 | 拆解匹配条件/正则分支，说明锚定与大小写语义，指出防护边界（如绕过面） |
-| 如何加载到你的 WAF | **方式一固定为 jxwaf-agent 拉取并发布**（含示例话术与 AI 闭环步骤：hub pull → dry-run 预览 → 人工确认 → --apply → 可选流量验证）；方式二控制台 Hub 加载（hub-load）；方式三控制台手工粘贴（字段对照表 + 完整原文） |
+| 如何加载到你的 WAF | **方式一固定为 jxwaf-agent 拉取并发布**（含示例话术与 AI 闭环步骤：`rule web hub-load --params '{"hub_repo":"...","force_load":"false"}'` dry-run 预览 → 人工确认 → --apply → 可选流量验证；后端直接从 hub.jxwaf.com 拉取，无需本地中转）；方式二控制台「导入远程规则」（Web 防护规则页顶部按钮，三版本一致；字段：远程地址=`用户名/策略名`、API Key=私有策略才填、强行导入默认关——关闭时同名规则整个导入报错失败不做变更，开启时逐条先删后插覆盖）；方式三控制台手工粘贴（字段对照表 + 完整原文）。**须注明「导入规则」（本地导入）与「导入远程规则」的区别**：前者期望 backup 导出的数组格式 `[{rule_name,...}]`（同名跳过，CLI 对应 `rule web load --params '{"rules":[...]}'`），后者走 Hub 拉取，勿混用 |
+| （策略 json_content 格式） | 必须与控制台后端加载函数匹配：Web 规则类为 `{"web_rule_protection_data":{"<规则名>":{rule_name,rule_detail,rule_matchs,rule_action,action_value,status,rule_order_time}}}` 包装对象（对齐 export_hub_config 产出，load_hub_config 逐条先删后插）；**扁平单规则对象会导致控制台报 `web_rule_protection_data is nil`**；其他资源类型（flow_rule/namelist/component 等）类推各自 `*_data` 键，发布前先读控制台 load 函数确认 |
 | 加载后验证 | 可直接复制执行的验证命令 + SOC 日志过滤字段 + 生效时延说明 |
 | 使用建议与注意事项 | 误报风险、SEO/业务影响、观察上线建议、白名单配合方式 |
 | 验证记录 | 测试环境用例数与通过情况 |

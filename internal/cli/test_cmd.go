@@ -258,6 +258,10 @@ func newTestVerifyCmd() *cobra.Command {
 				out["deployed"] = map[string]any{"op": vf.Op, "result": resp.Result, "message": resp.Message}
 				if !resp.Result {
 					out["deploy_warning"] = "部署失败，以下流量验证结果可能无意义"
+				} else {
+					// 节点每 3 秒拉取一次配置，部署成功后必须等同步完成再打流量，
+					// 否则有状态检测（组件计数/流量规则处罚）在旧配置上执行，验证结果失真
+					time.Sleep(5 * time.Second)
 				}
 			}
 

@@ -76,6 +76,22 @@ jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|mon
 ## 文档索引
 
 - `docs/`：命令参考与模块规范
+
+按任务场景查对应文档：
+
+| 场景 | 文档 |
+|---|---|
+| 命令用法/参数含义不确定 | `docs/cli.md`（命令参考，以本文档为准） |
+| Web/流量规则、白名单字段与写法 | `docs/rule_dev.md` |
+| 名单、网站接入等配置模块字段 | `docs/module_dev.md` |
+| 防护组件（Lua）开发与红线 | `docs/component_dev.md` |
+| 误报/漏报排查与调优 | `docs/playbook.md` |
+| 日志分析与报表取数 | `docs/analysis.md` |
+| 测试环境验证（用例设计与执行） | `docs/verify.md` |
+| 现成防护方案复用 | `docs/profiles.md` |
+| SOP 与安全红线细则 | `docs/sop.md` |
+| 标准版/专业版/云WAF 差异 | `docs/versions.md` |
+
 - docs.jxwaf.com：官方最新文档（标准版/专业版/云WAF 分站，含部署教程与 API 规范）
 
 ## 开发约定
