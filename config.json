@@ -1,0 +1,20 @@
+{
+  "active": "",
+  "test_env": "test",
+  "environments": {
+    "test": {
+      "name": "test",
+      "version": "professional",
+      "base_url": "https://waf-demo.jxwaf.com",
+      "waf_auth": "6e61ff97-1ba8-4828-bc07-b7b4eeb2d4bd",
+      "group_name": "test",
+      "test_url": "https://waf-demo.jxwaf.com:4443"
+    }
+  },
+  "hub": {
+    "base_url": "https://hub.jxwaf.com",
+    "api_token": "",
+    "default_product": "jxwaf",
+    "default_scene": "应用安全"
+  }
+}

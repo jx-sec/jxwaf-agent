@@ -234,7 +234,7 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 | 规则作用 | 一句话说明防护目标与动作效果 |
 | 防护范围 | 分类明细表，列全覆盖特征 |
 | 匹配逻辑 | 拆解匹配条件/正则分支，说明锚定与大小写语义，指出防护边界（如绕过面） |
-| 如何加载到你的 WAF | **方式一固定为 jxwaf-agent 拉取并发布**（含示例话术与 AI 闭环步骤：`rule web hub-load --params '{"hub_repo":"...","force_load":"false"}'` dry-run 预览 → 人工确认 → --apply → 可选流量验证；后端直接从 hub.jxwaf.com 拉取，无需本地中转）；方式二控制台「导入远程规则」（Web 防护规则页顶部按钮，三版本一致；字段：远程地址=`用户名/策略名`、API Key=私有策略才填、强行导入默认关——关闭时同名规则整个导入报错失败不做变更，开启时逐条先删后插覆盖）；方式三控制台手工粘贴（字段对照表 + 完整原文）。**须注明「导入规则」（本地导入）与「导入远程规则」的区别**：前者期望 backup 导出的数组格式 `[{rule_name,...}]`（同名跳过，CLI 对应 `rule web load --params '{"rules":[...]}'`），后者走 Hub 拉取，勿混用 |
+| 如何加载到你的 WAF | **方式一固定为 jxwaf-agent 拉取并发布**（含示例话术与 AI 闭环步骤：`rule web hub-load --params '{"hub_repo":"...","force_load":"false"}'` dry-run 预览 → 人工确认 → --apply → 可选流量验证；后端直接从 hub.jxwaf.com 拉取，无需本地中转）；方式二控制台远程导入（入口与按钮名随资源类型，三版本一致：Web 规则类=Web 防护规则页「导入远程规则」按钮，流量规则/白名单/防篡改/缓存策略等=各自页面同名「导入远程规则」按钮，组件类=防护组件页「**导入远程组件**」按钮）；字段统一：远程地址=`用户名/策略名`、API Key=私有策略才填、强行导入默认关——关闭时同名规则整个导入报错失败不做变更，开启时逐条先删后插覆盖；方式三控制台手工粘贴（字段对照表 + 完整原文）。**须注明本地导入与远程导入的区别**：前者期望 backup 导出的数组格式 `[{rule_name,...}]`（同名跳过，CLI 对应 `rule web load --params '{"rules":[...]}'`），后者走 Hub 拉取，勿混用 |
 | （策略 json_content 格式） | 必须与控制台后端加载函数匹配：Web 规则类为 `{"web_rule_protection_data":{"<规则名>":{rule_name,rule_detail,rule_matchs,rule_action,action_value,status,rule_order_time}}}` 包装对象（对齐 export_hub_config 产出，load_hub_config 逐条先删后插）；**扁平单规则对象会导致控制台报 `web_rule_protection_data is nil`**；其他资源类型（flow_rule/namelist/component 等）类推各自 `*_data` 键，发布前先读控制台 load 函数确认 |
 | 加载后验证 | 可直接复制执行的验证命令 + SOC 日志过滤字段 + 生效时延说明 |
 | 使用建议与注意事项 | 误报风险、SEO/业务影响、观察上线建议、白名单配合方式 |
