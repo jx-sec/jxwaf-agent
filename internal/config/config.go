@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // Version 表示 JXWAF 产品版本。
@@ -79,46 +80,14 @@ func (h HubConfig) Masked() HubConfig {
 // Config 本地配置（项目目录 config.json，权限 0600）。
 type Config struct {
 	Active       string                 `json:"active"`
-	TestEnv   string                 `json:"test_env,omitempty"` // 官方测试环境名（test 命令组专用）
+	TestEnv      string                 `json:"test_env,omitempty"` // 测试环境名（test 命令组专用）
 	Environments map[string]Environment `json:"environments"`
 	Hub          *HubConfig             `json:"hub,omitempty"` // 策略共享平台（hub 命令组）
 }
 
-// 官方测试环境内置默认值（开箱即用）：专业版固定共享账号 + 官方预置设施。
-// config.json 缺失或为空时自动写入，无需手动初始化；waf_auth 为官方共享测试
-// 账号的固定凭据（非用户私密凭据，与 base_url / test_url 同为公开常量）。
-const (
-	// OfficialTestEnvName 官方测试环境名（test 命令组默认操作目标）
-	OfficialTestEnvName = "test"
-	// OfficialTestBaseURL 官方测试环境管理控制台地址（公开非凭据）
-	OfficialTestBaseURL = "https://waf-demo.jxwaf.com"
-	// OfficialTestSiteURL 官方测试环境固定测试站点地址（公开非凭据）
-	OfficialTestSiteURL = "https://waf-demo.jxwaf.com:4443"
-	// OfficialTestWafAuth 官方共享测试账号的固定凭据（开箱即用默认值）
-	OfficialTestWafAuth = "6e61ff97-1ba8-4828-bc07-b7b4eeb2d4bd"
-	// OfficialTestGroupName 官方预置域名组
-	OfficialTestGroupName = "test"
-)
-
-// OfficialTestEnv 返回官方测试环境定义（固定值）。
-func OfficialTestEnv() Environment {
-	return Environment{
-		Name:      OfficialTestEnvName,
-		Version:   VersionProfessional,
-		BaseURL:   OfficialTestBaseURL,
-		WafAuth:   OfficialTestWafAuth,
-		GroupName: OfficialTestGroupName,
-		TestURL:   OfficialTestSiteURL,
-	}
-}
-
-// DefaultConfig 返回默认配置：仅含官方测试环境（开箱即用）。
-func DefaultConfig() *Config {
-	return &Config{
-		TestEnv:      OfficialTestEnvName,
-		Environments: map[string]Environment{OfficialTestEnvName: OfficialTestEnv()},
-	}
-}
+// DefaultTestEnvName 测试环境的默认环境名（test 命令组默认操作目标）。
+// 仅是约定名称，不代表任何内置环境：测试环境必须经 test init 显式配置。
+const DefaultTestEnvName = "test"
 
 // LocalConfigName 配置文件名（与 jxwaf-cli 二进制同目录）。
 const LocalConfigName = "config.json"
@@ -179,20 +148,27 @@ func Lock() (func(), error) {
 	}, nil
 }
 
-// Load 读取配置；文件不存在或为空时写入默认配置（官方测试环境开箱即用，无需手动 init）。
+// 配置缺失/为空的哨兵错误（LoadOrCreate 据此区分"未配置"与真正的读取失败）。
+var (
+	ErrConfigMissing = errors.New("配置文件不存在")
+	ErrConfigEmpty   = errors.New("配置文件为空")
+)
+
+// Load 读取配置；文件不存在或为空时报错，要求先配置（测试环境用 test init，自有环境用 config set）。
 func Load() (*Config, error) {
 	path, err := Path()
 	if err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: %s（请先运行 jxwaf-cli test init 配置测试环境，或 jxwaf-cli config set 配置自有环境）", ErrConfigMissing, path)
+		}
 		return nil, err
 	}
-	if len(data) == 0 {
-		c := DefaultConfig()
-		_ = Save(c) // 种子写入失败不影响本次使用（下次 Load 重试）
-		return c, nil
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return nil, fmt.Errorf("%w: %s（请先运行 jxwaf-cli test init 配置测试环境，或 jxwaf-cli config set 配置自有环境）", ErrConfigEmpty, path)
 	}
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
@@ -202,6 +178,16 @@ func Load() (*Config, error) {
 		c.Environments = map[string]Environment{}
 	}
 	return &c, nil
+}
+
+// LoadOrCreate 读取配置；文件不存在或为空时返回空配置（供 test init / config set
+// 等写入类命令首次创建配置使用），其余错误照常返回。
+func LoadOrCreate() (*Config, error) {
+	c, err := Load()
+	if errors.Is(err, ErrConfigMissing) || errors.Is(err, ErrConfigEmpty) {
+		return &Config{Environments: map[string]Environment{}}, nil
+	}
+	return c, err
 }
 
 // Save 原子写入配置（临时文件 + rename），并确保权限为 0600。
@@ -252,7 +238,7 @@ func (c *Config) Resolve(envFlag string) (Environment, error) {
 		name = c.Active
 	}
 	if name == "" {
-		return Environment{}, errors.New("环境未初始化：请先运行 jxwaf-cli config set 配置自有环境（官方测试环境开箱即用，直接用 test 命令组操作），并用 config validate 确认就绪")
+		return Environment{}, errors.New("环境未初始化：请先运行 jxwaf-cli config set 配置自有环境（测试环境用 jxwaf-cli test init 配置），并用 config validate 确认就绪")
 	}
 	e, ok := c.Environments[name]
 	if !ok {
@@ -261,10 +247,10 @@ func (c *Config) Resolve(envFlag string) (Environment, error) {
 	return e, nil
 }
 
-// TestName 返回官方测试环境名（未初始化时为默认名 test）。
+// TestName 返回测试环境名（未配置时为约定默认名 test）。
 func (c *Config) TestName() string {
 	if c.TestEnv == "" {
-		return "test"
+		return DefaultTestEnvName
 	}
 	return c.TestEnv
 }

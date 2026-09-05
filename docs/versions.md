@@ -27,7 +27,7 @@ jxwaf-cli 对接 JXWAF 标准版 / 专业版 / 云WAF。**版本差异由 CLI ad
 ### 专业版
 - `config set --version professional --group-name <默认组>`；每命令可用 `--group` 覆盖
 - 所有防护类操作必须指定域名组；域名/组件/名单为全局
-- **官方测试环境（`test` 命令组默认目标）**：专业版固定共享账号 + CLI 预置管理地址（`https://waf-demo.jxwaf.com`）/域名组/测试站点（`https://waf-demo.jxwaf.com:4443`），开箱即用、无需初始化；所有人共用，验证后自动回到空环境（自建测试环境用 `test init` 配置，域名组留空自动发现）
+- **测试环境（`test` 命令组默认目标）**：无内置默认值，用 `test init` 配置（管理地址/凭据/测试站点必填，域名组留空自动发现）；验证后自动回到空环境
 
 ### 云WAF
 - 自建云主账号（admin 模式）：`config set` 只配 `waf_auth` + `--sub-user-name`；防护操作自动注入子账号名，组件/名单/网站接入全功能

@@ -39,7 +39,7 @@ func newConfigShowCmd() *cobra.Command {
 			}
 			out := map[string]any{
 				"active":       c.Active,
-				"test_env":  c.TestName(),
+				"test_env":     c.TestName(),
 				"environments": masked,
 			}
 			if c.Hub != nil {
@@ -91,7 +91,7 @@ func newConfigSetCmd() *cobra.Command {
 				return nil, err
 			}
 			defer unlock()
-			c, err := config.Load()
+			c, err := config.LoadOrCreate()
 			if err != nil {
 				return nil, err
 			}

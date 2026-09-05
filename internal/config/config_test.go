@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,51 +74,36 @@ func TestSaveAtomicNoLeftoverTemp(t *testing.T) {
 	}
 }
 
-func TestLoadEmptyFileSeedsOfficialTest(t *testing.T) {
+func TestLoadEmptyFileErrors(t *testing.T) {
 	path := newTestPath(t)
 	t.Setenv("JXWAF_CONFIG_PATH", path)
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := Load()
-	if err != nil {
-		t.Fatalf("空文件应种子写入默认配置: %v", err)
-	}
-	want := OfficialTestEnv()
-	got, ok := c.Environments[OfficialTestEnvName]
-	if !ok || got.WafAuth != want.WafAuth || got.BaseURL != want.BaseURL ||
-		got.GroupName != want.GroupName || got.TestURL != want.TestURL {
-		t.Errorf("空文件应写入官方测试环境默认值: %+v", c.Environments)
+	_, err := Load()
+	if !errors.Is(err, ErrConfigEmpty) {
+		t.Fatalf("空文件应报错要求配置，实际: %v", err)
 	}
 }
 
-func TestLoadMissingSeedsOfficialTest(t *testing.T) {
+func TestLoadMissingErrors(t *testing.T) {
 	path := newTestPath(t)
 	t.Setenv("JXWAF_CONFIG_PATH", path)
-	c, err := Load()
+	_, err := Load()
+	if !errors.Is(err, ErrConfigMissing) {
+		t.Fatalf("文件缺失应报错要求配置，实际: %v", err)
+	}
+	// 报错不应创建文件，也不应写入任何内置默认值
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Errorf("Load 报错时不应创建配置文件: %v", statErr)
+	}
+	// LoadOrCreate 供写入类命令首次创建配置：缺失/为空时返回空配置
+	c, err := LoadOrCreate()
 	if err != nil {
-		t.Fatalf("文件缺失应种子写入默认配置: %v", err)
+		t.Fatalf("LoadOrCreate 缺失时应返回空配置: %v", err)
 	}
-	if c.TestName() != OfficialTestEnvName {
-		t.Errorf("默认测试环境名应为 %q: %+v", OfficialTestEnvName, c)
-	}
-	if _, ok := c.Environments[OfficialTestEnvName]; !ok {
-		t.Errorf("默认配置应包含官方测试环境: %+v", c.Environments)
-	}
-	// 种子应落盘（0600），后续 Load 从文件读取
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("种子写入应创建配置文件: %v", err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Errorf("配置文件权限应为 0600，实际 %v", info.Mode().Perm())
-	}
-	again, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again.Environments[OfficialTestEnvName].WafAuth != OfficialTestWafAuth {
-		t.Errorf("二次 Load 应从文件读取官方测试环境: %+v", again.Environments)
+	if c.Environments == nil || len(c.Environments) != 0 {
+		t.Errorf("LoadOrCreate 应返回空环境表: %+v", c.Environments)
 	}
 }
 

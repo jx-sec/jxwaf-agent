@@ -47,8 +47,8 @@ JXWAF Agent：一个 Go 编写的命令行工具 `jxwaf-cli` + 文档体系，�
 go build -o jxwaf-cli ./cmd/cli
 go run ./cmd/cli
 
-# 官方测试环境开箱即用：config.json 缺失/为空时 CLI 自动写入内置默认（固定共享账号+官方预置设施），无需初始化
-# 自建测试环境用 test init 配置（--base-url/--waf-auth/--test-url 必填，域名组留空自动发现）
+# 测试环境无内置默认值：config.json 缺失/为空时命令报错，要求先配置
+# 测试环境用 test init 配置（--base-url/--waf-auth/--test-url 必填，域名组留空自动发现）
 jxwaf-cli test init --base-url URL --waf-auth <凭据> --test-url <测试站点>
 jxwaf-cli config show                # 配置查看（脱敏）
 jxwaf-cli config use <环境名>        # 切换 active 环境
@@ -62,14 +62,14 @@ jxwaf-cli verify <用例> --url URL    # 通用流量验证（不动配置）
 jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|monitor|subaccount|custom|cache|sysconf ...
 ```
 
-官方测试环境（test 命令组）与自有环境命令严格隔离：test 命令固定只操作测试环境（忽略 `--env`），通用命令默认只操作 active 环境。配置文件为**项目目录下的 `config.json`**（与 jxwaf-cli 同级，含凭据严禁提交）；官方测试环境由 CLI 内置默认值在 config.json 缺失/为空时自动写入（管理地址、共享凭据、域名组、测试站点 `https://waf-demo.jxwaf.com:4443` 全部预置，开箱即用），自建测试环境经 `test init` 配置后保存进 config.json，删除 config.json 即恢复官方默认。
+测试环境（test 命令组）与自有环境命令严格隔离：test 命令固定只操作测试环境（忽略 `--env`），通用命令默认只操作 active 环境。配置文件为**项目目录下的 `config.json`**（与 jxwaf-cli 同级，含凭据严禁提交）；CLI **无任何内置默认环境**——config.json 缺失或为空时命令直接报错并引导配置，测试环境经 `test init` 配置后保存进 config.json，自有环境经 `config set` 配置。
 
 ## 标准工作流
 
-**环境就绪检查** → 需求分析 → 信息澄清 → 查 docs/ 文档 → generate 生成 → **官方测试环境 `test verify` 一键闭环验证**（test 命令组与自有环境隔离）→ 用户确认 → 生产 dry-run → --apply。
+**环境就绪检查** → 需求分析 → 信息澄清 → 查 docs/ 文档 → generate 生成 → **测试环境 `test verify` 一键闭环验证**（test 命令组与自有环境隔离）→ 用户确认 → 生产 dry-run → --apply。
 
-- **环境就绪检查（第一步，必须）**：先跑 `jxwaf-cli config show` 确认 `config.json` 就绪（官方测试环境开箱即用，自动写入默认；自有环境需 `config set` 配置）。自有环境未配置时**提醒用户先 `config set` 并终止流程**，不进入 generate/apply/verify 环节；已配置用 `config validate` 确认连通性。自有环境报 "admin api is not enabled" / "ip not allowed" 时，提醒用户按 README 环境前置条件修改控制台 docker-compose（`ADMIN_API_ENABLE: "true"` + `ADMIN_API_WHITELIST: "*"`，生产环境可收紧为固定 IP）并重启容器
-- 官方测试环境开箱即用（无需初始化）；自建测试环境用 `jxwaf-cli test init` 配置；测试环境操作统一走 `test` 命令组（verify/cleanup/reset），默认环境 test，与 active 无关
+- **环境就绪检查（第一步，必须）**：先跑 `jxwaf-cli config show` 确认 `config.json` 就绪（CLI 无内置默认值：测试环境需 `test init` 配置，自有环境需 `config set` 配置；未配置时相应命令直接报错）。自有环境未配置时**提醒用户先 `config set` 并终止流程**，不进入 generate/apply/verify 环节；测试环境未配置时提醒用户先 `test init`；已配置用 `config validate` 确认连通性。自有环境报 "admin api is not enabled" / "ip not allowed" 时，提醒用户按 README 环境前置条件修改控制台 docker-compose（`ADMIN_API_ENABLE: "true"` + `ADMIN_API_WHITELIST: "*"`，生产环境可收紧为固定 IP）并重启容器
+- 测试环境用 `jxwaf-cli test init` 配置（无内置默认值，使用前必须初始化）；测试环境操作统一走 `test` 命令组（verify/cleanup/reset），默认环境 test，与 active 无关
 - **策略共享（hub 命令组，可选步骤）**：仅当用户主动要求发布/共享策略时才执行 `hub push`，不主动建议、不进入默认工作流。push 默认 dry-run，用户确认后 `--apply`（upsert 覆盖语义，策略名创建后不可改）；默认私有，`--public` 公开前必须确认策略 JSON 无敏感信息（真实域名/源站 IP）。`--scene` 由 AI 按策略实际类型显式指定（如缓存/限频/CC 类=流量安全，Web 攻击规则=应用安全，组件=功能组件），不要依赖默认值兜底。首次使用时引导用户 `hub login` 换取 API Token（密码不落盘），或 `hub init --token`（Hub 网页「个人设置」页复制 Token）。详见 docs/cli.md
 - **文档优先级**：以本地 `docs/` 为主；有冲突或错误、或拿不准的字段，再从 docs.jxwaf.com 获取最新（按版本分站，部署看各站 Deployment-Tutorial），以官方为准
 

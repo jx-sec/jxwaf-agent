@@ -16,15 +16,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// 官方测试环境：专业版固定共享账号 + 固定设施，所有人共享（测试环境约定：验证流程自动回到空环境）。
-// 官方测试环境使用独立命令组 `jxwaf-cli test`，与自有环境命令彻底分开。
-// 官方测试环境开箱即用：config.json 缺失或为空时 config.Load 自动写入内置默认值
-// （见 config.OfficialTestEnv），无需手动初始化。test init 仅用于配置自定义测试
-// 环境（--base-url / --waf-auth / --test-url 必填，域名组留空自动发现）。
+// 测试环境：配置下发生产前的验证环境，独立命令组 `jxwaf-cli test`，与自有环境命令彻底分开。
+// 测试环境无内置默认值：必须经 test init 显式配置（--base-url / --waf-auth /
+// --test-url 必填，域名组留空自动发现），保存进项目目录 config.json。
 // test_url 为测试环境的测试站点地址（配置下发到测试环境后访问它验证规则生效），
 // 保存在测试环境定义中（environments.<test>.test_url）。
 
-// resolveTest 解析官方测试环境。
+// resolveTest 解析测试环境。
 // 安全红线：test 命令组固定使用配置中的测试环境名，忽略全局 --env，
 // 防止 `test verify --env prod` 之类的误用把清空/删除操作打到自有环境。
 func resolveTest() (*adapter.Adapter, *client.Client, string, error) {
@@ -35,7 +33,7 @@ func resolveTest() (*adapter.Adapter, *client.Client, string, error) {
 	name := c.TestName()
 	env, ok := c.Environments[name]
 	if !ok {
-		return nil, nil, "", fmt.Errorf("测试环境 %q 不存在（config.json 可能被手工改坏）：可删除 config.json 恢复默认（官方测试环境开箱即用），或运行 jxwaf-cli test init 配置自定义测试环境", name)
+		return nil, nil, "", fmt.Errorf("测试环境 %q 未配置：请运行 jxwaf-cli test init 配置（--base-url / --waf-auth / --test-url 必填）", name)
 	}
 	a, err := adapter.New(env)
 	if err != nil {
@@ -62,7 +60,7 @@ func deployNameKey(op adapter.Op) (string, bool) {
 func newTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "官方测试环境（独立命令组，与自有环境命令隔离；忽略 --env）",
+		Short: "测试环境命令组（独立于自有环境命令；忽略 --env）",
 	}
 	cmd.AddCommand(
 		newTestInitCmd(),
@@ -83,17 +81,17 @@ func newTestInitCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "init --base-url URL --waf-auth AUTH --test-url URL [--name ENV] [--group-name G]",
-		Short: "初始化自定义测试环境（官方测试环境开箱即用，无需初始化）",
+		Short: "初始化测试环境（保存进项目目录 config.json；无内置默认值，使用前必须先初始化）",
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
-			envName = orDefault(envName, config.OfficialTestEnvName)
+			envName = orDefault(envName, config.DefaultTestEnvName)
 			if baseURL == "" {
-				return nil, fmt.Errorf("缺少 --base-url：自定义测试环境的管理控制台地址")
+				return nil, fmt.Errorf("缺少 --base-url：测试环境的管理控制台地址")
 			}
 			if wafAuth == "" {
-				return nil, fmt.Errorf("缺少 --waf-auth：自定义测试环境的凭据")
+				return nil, fmt.Errorf("缺少 --waf-auth：测试环境的凭据")
 			}
 			if testURL == "" {
-				return nil, fmt.Errorf("缺少 --test-url：自定义测试环境的测试站点地址（配置下发后访问它验证）")
+				return nil, fmt.Errorf("缺少 --test-url：测试环境的测试站点地址（配置下发后访问它验证）")
 			}
 			if u, err := url.Parse(testURL); err != nil || u.Host == "" {
 				return nil, fmt.Errorf("--test-url 需为完整地址（含 http/https 与域名）")
@@ -104,7 +102,7 @@ func newTestInitCmd() *cobra.Command {
 				return nil, err
 			}
 			defer unlock()
-			cfg, err := config.Load()
+			cfg, err := config.LoadOrCreate()
 			if err != nil {
 				return nil, err
 			}
@@ -152,13 +150,13 @@ func newTestInitCmd() *cobra.Command {
 				"version":    "professional",
 				"group_name": groupName,
 				"test_url":   testURL,
-				"hint":       "自定义测试环境已保存（环境名 " + envName + "，测试站点 " + testURL + "）。test 命令组（verify/reset/cleanup）将操作该环境；恢复官方测试环境可删除 config.json（自动重建默认）。 " + warning,
+				"hint":       "测试环境已保存（环境名 " + envName + "，测试站点 " + testURL + "）。test 命令组（verify/reset/cleanup）将操作该环境；更换测试环境重新运行 test init 即可。 " + warning,
 			}, nil
 		}),
 	}
-	cmd.Flags().StringVar(&wafAuth, "waf-auth", "", "自定义测试环境凭据（必填）")
-	cmd.Flags().StringVar(&baseURL, "base-url", "", "自定义测试环境管理控制台地址（必填）")
-	cmd.Flags().StringVar(&envName, "name", "", "保存的环境名（默认 test，覆盖官方测试环境即切换）")
+	cmd.Flags().StringVar(&wafAuth, "waf-auth", "", "测试环境凭据（必填）")
+	cmd.Flags().StringVar(&baseURL, "base-url", "", "测试环境管理控制台地址（必填）")
+	cmd.Flags().StringVar(&envName, "name", "", "保存的环境名（默认 test，覆盖即切换测试环境）")
 	cmd.Flags().StringVar(&groupName, "group-name", "", "专业版域名组（留空则尝试自动发现）")
 	cmd.Flags().StringVar(&testURL, "test-url", "", "测试站点地址（必填；配置下发后访问它验证）")
 	return cmd
@@ -209,7 +207,7 @@ func newTestVerifyCmd() *cobra.Command {
 				}
 			}
 			if targetURL == "" {
-				return nil, fmt.Errorf("--url 必填：测试站点地址（或恢复 config.json 默认配置）")
+				return nil, fmt.Errorf("--url 必填：测试站点地址（或 test init 时用 --test-url 配置）")
 			}
 			u, err := url.Parse(targetURL)
 			if err != nil || u.Host == "" {
@@ -298,7 +296,7 @@ func newTestVerifyCmd() *cobra.Command {
 			return out, nil
 		}),
 	}
-	cmd.Flags().StringVar(&targetURL, "url", "", "被测站点地址（默认官方测试域名）")
+	cmd.Flags().StringVar(&targetURL, "url", "", "被测站点地址（默认取测试环境配置的 test_url）")
 	cmd.Flags().IntVar(&waitSec, "wait", 5, "打流量后等待日志落库的秒数")
 	cmd.Flags().BoolVar(&keep, "keep", false, "保留本次部署的配置（默认验证后清理）")
 	cmd.Flags().BoolVar(&noFresh, "no-fresh", false, "不清空基线（连续调试时使用）")

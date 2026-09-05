@@ -12,7 +12,7 @@
 
 ## 配置文件与查找顺序
 
-CLI 配置（环境、凭据、官方测试环境地址）从**项目目录下的 `config.json`**（与 jxwaf-cli 二进制同级）读取，查找顺序：
+CLI 配置（环境、凭据、测试环境地址）从**项目目录下的 `config.json`**（与 jxwaf-cli 二进制同级）读取，查找顺序：
 
 1. `JXWAF_CONFIG_PATH` 环境变量指定的路径（测试与多配置场景）
 2. 当前目录 `./config.json`
@@ -20,6 +20,8 @@ CLI 配置（环境、凭据、官方测试环境地址）从**项目目录下�
 4. 都不存在时默认 `./config.json`（写入操作在此创建）
 
 **`config.json` 含凭据，已加入 `.gitignore`，严禁提交到仓库。**
+
+**CLI 无任何内置默认环境**：`config.json` 缺失或为空时命令直接报错，要求先配置（测试环境 `test init`，自有环境 `config set`）。
 
 配置文件结构（节选）：
 
@@ -31,21 +33,21 @@ CLI 配置（环境、凭据、官方测试环境地址）从**项目目录下�
     "test": {
       "name": "test",
       "version": "professional",
-      "base_url": "https://waf-demo.jxwaf.com",
+      "base_url": "https://your-test-console",
       "waf_auth": "<凭据>",
-      "test_url": "https://waf-demo.jxwaf.com:4443"
+      "test_url": "https://your-test-site"
     }
   }
 }
 ```
 
-- 环境级 `test_url`：**测试站点地址**——配置下发到该环境后，访问此地址验证规则是否生效（`test verify` 打流量的目标）；官方测试环境固定为 `https://waf-demo.jxwaf.com:4443`，由 CLI 内置默认自动写入
+- 环境级 `test_url`：**测试站点地址**——配置下发到该环境后，访问此地址验证规则是否生效（`test verify` 打流量的目标）；由 `test init --test-url` 配置
 
 ## 初始化与配置
 
 ### `jxwaf-cli test init`
 
-配置**自定义测试环境**（项目目录 `config.json`，权限 0600）。官方测试环境**开箱即用、无需初始化**：`config.json` 缺失或为空时 CLI 自动写入内置默认值（专业版固定共享账号 + 官方预置管理地址/域名组/测试站点）；删除 `config.json` 即恢复官方默认。
+配置**测试环境**（项目目录 `config.json`，权限 0600）。测试环境**无内置默认值**：使用 `test` 命令组前必须先初始化，否则命令直接报错。
 
 ```
 jxwaf-cli test init --base-url URL --waf-auth AUTH --test-url URL [--name ENV] [--group-name G]
@@ -53,7 +55,7 @@ jxwaf-cli test init --base-url URL --waf-auth AUTH --test-url URL [--name ENV] [
 
 - 必填：管理控制台地址 `--base-url`、凭据 `--waf-auth`、测试站点地址 `--test-url`（配置下发后访问它验证）
 - 专业版防护操作必须指定域名组：`--group-name` 显式指定，或留空自动发现环境里的第一个域名组
-- `--name` 默认 `test`，覆盖官方测试环境即完成切换；test 命令组（verify/reset/cleanup）自动操作该环境
+- `--name` 默认 `test`，覆盖即完成切换；test 命令组（verify/reset/cleanup）自动操作该环境
 - **不会修改 active 配置**：通用命令（rule/namelist/apply 等）默认不会命中测试环境；test 命令组固定使用测试环境，忽略 `--env`（防止误指向生产）
 
 ### `jxwaf-cli config`
@@ -176,7 +178,7 @@ jxwaf-cli monitor list --params '{...}'
 
 ## 测试环境验证闭环
 
-### 官方测试环境（test 命令组，与自有环境隔离）
+### 测试环境（test 命令组，与自有环境隔离）
 
 ```
 jxwaf-cli test verify <用例文件> [--url https://...] [--wait 5] [--keep] [--no-fresh]
@@ -184,11 +186,12 @@ jxwaf-cli test cleanup --type web-rule|flow-rule|web-white|flow-white|tamper|nam
 jxwaf-cli test reset [--apply]
 ```
 
+- 测试环境无内置默认值：使用前必须先 `test init` 配置
 - `test verify` 为**一键闭环**：清空基线 → 部署信封配置 → 打测试流量 → 查 SOC 日志 → 报告 → 清理本次配置（环境回到空态）。判定：`expect=block` 且状态码 403/444 → `blocked`；`expect=pass` 且非 403/444 → `passed`；否则 `unexpected`。watch 类规则返回 200，需结合 `soc_logs` 中 `waf_action` 判读（见 [verify.md](verify.md)）
   - `--no-fresh`：不清基线（连续调试）；`--keep`：验证后保留配置
-  - `--url` 省略时取测试站点地址（配置下发到测试环境后访问它验证，当前固定为 `https://waf-demo.jxwaf.com:4443`）：取值顺序 `--url` > 测试环境配置的 `test_url`
+  - `--url` 省略时取测试站点地址（配置下发到测试环境后访问它验证）：取值顺序 `--url` > 测试环境配置的 `test_url`
 - `test cleanup`：按名称批量删除测试环境中的配置，默认 dry-run，`--apply` 执行（**删除不可恢复**）
-- `test reset`：测试环境全量清空规则/白名单/名单/组件（**不删域名**），默认 dry-run；官方兜底"每日空环境"可挂定时 `jxwaf-cli test reset --apply`
+- `test reset`：测试环境全量清空规则/白名单/名单/组件（**不删域名**），默认 dry-run；兜底"每日空环境"可挂定时 `jxwaf-cli test reset --apply`
 
 ### 通用验证（自有环境，只发流量不动配置）
 

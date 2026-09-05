@@ -45,12 +45,12 @@
 
 ```
 需求分析 → 信息澄清 → 读 docs 对应规范 → generate 生成（含用例，--output 落盘信封）
-→ 官方测试环境：test verify 一键闭环（清基线→部署→打流量→查日志→报告→清理，环境回到空态）
+→ 测试环境：test verify 一键闭环（清基线→部署→打流量→查日志→报告→清理，环境回到空态）
 → 误报/漏报调整（≤3 次迭代，调试用 --no-fresh/--keep）
 → 展示验证报告与最终配置 → 用户确认 → 生产 dry-run → --apply → 结果反馈
 ```
 
-官方测试环境用独立命令组 `test`（verify/cleanup/reset），与自有环境命令隔离；自有环境验证用通用 `verify --url`（只发流量不动配置）。官方兜底每日 `test reset --apply`。
+测试环境用独立命令组 `test`（verify/cleanup/reset），与自有环境命令隔离（无内置默认值，使用前需 `test init` 配置）；自有环境验证用通用 `verify --url`（只发流量不动配置）。兜底每日 `test reset --apply`。
 
 **文档优先级**：以本地 `docs/` 为主。当本地文档与线上行为有冲突或错误、或拿不准的字段时，再到 **docs.jxwaf.com** 获取最新（按版本分站：`/jxwaf-standard/`、`/jxwaf-professional/`、`/jxwaf-cloud/`；部署类看各站 `Deployment-Tutorial`），以官方为准。
 
