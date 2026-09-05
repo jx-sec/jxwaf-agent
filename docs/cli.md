@@ -224,6 +224,7 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 - **Token 缺失引导**：hub 未配置时命令报错并提示 `hub login`（账号密码换 Token，密码不落盘）或 `hub init --token`（Hub 网页「个人设置」页复制 Token，或环境变量 `JXWAF_HUB_TOKEN`）；配置一次后长期有效，网页端重新生成 Token 后需重新配置
 - `pull` 的 `--product` 必须与策略 product 匹配，否则平台返回 400
 - `push` 的策略文件**必须**是控制台 hub-load 可消费的包装结构 `{"<资源>_data": {"<名称>": {配置字段...}}}`（如 `web_rule_protection_data`/`flow_rule_protection_data`/`component_data`/`global_name_list_data` 等，键名对齐各版本控制台 `load_*_hub_config` 读取的 `res_body['xxx_data']`），不含 `test_cases` 与租户参数（group_name 等由拉取方环境注入）。**扁平单规则对象会导致控制台「导入远程规则」报 `..._data is nil`**——`hub push` 已本地校验该结构，不符合直接报错拒绝上传
+- **条目字段须对齐控制台 load 函数的入库字段**：控制台 load 不补全字段、直接拼 SQL 入库，按 create 接口的最小字段集构造会缺字段——如组件缺 `status`/`rule_order_time` 时报 SQL 语法错误（`near ',)'`）。权威格式**用对应资源的 `hub-export` 导出一份真实结构对照**（导出格式=导入格式闭环）；组件类 `component_data` 条目必须含 `name`/`detail`/`code`/`conf`/`status`/`rule_order_time`，`hub push` 已本地校验，缺失直接拒绝上传
 
 ### Hub 策略文档（readme）模版
 
@@ -234,13 +235,21 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 | 规则作用 | 一句话说明防护目标与动作效果 |
 | 防护范围 | 分类明细表，列全覆盖特征 |
 | 匹配逻辑 | 拆解匹配条件/正则分支，说明锚定与大小写语义，指出防护边界（如绕过面） |
-| 如何加载到你的 WAF | **方式一固定为 jxwaf-agent 拉取并发布**（含示例话术与 AI 闭环步骤：`rule web hub-load --params '{"hub_repo":"...","force_load":"false"}'` dry-run 预览 → 人工确认 → --apply → 可选流量验证；后端直接从 hub.jxwaf.com 拉取，无需本地中转）；方式二控制台远程导入（入口与按钮名随资源类型，三版本一致：Web 规则类=Web 防护规则页「导入远程规则」按钮，流量规则/白名单/防篡改/缓存策略等=各自页面同名「导入远程规则」按钮，组件类=防护组件页「**导入远程组件**」按钮）；字段统一：远程地址=`用户名/策略名`、API Key=私有策略才填、强行导入默认关——关闭时同名规则整个导入报错失败不做变更，开启时逐条先删后插覆盖；方式三控制台手工粘贴（字段对照表 + 完整原文）。**须注明本地导入与远程导入的区别**：前者期望 backup 导出的数组格式 `[{rule_name,...}]`（同名跳过，CLI 对应 `rule web load --params '{"rules":[...]}'`），后者走 Hub 拉取，勿混用 |
-| （策略 json_content 格式） | 必须与控制台后端加载函数匹配：Web 规则类为 `{"web_rule_protection_data":{"<规则名>":{rule_name,rule_detail,rule_matchs,rule_action,action_value,status,rule_order_time}}}` 包装对象（对齐 export_hub_config 产出，load_hub_config 逐条先删后插）；**扁平单规则对象会导致控制台报 `web_rule_protection_data is nil`**；其他资源类型（flow_rule/namelist/component 等）类推各自 `*_data` 键，发布前先读控制台 load 函数确认 |
+| 如何加载到你的 WAF | 固定提供三种方式：方式一 jxwaf-agent 拉取并发布、方式二控制台远程导入、方式三控制台手工粘贴。各方式写法见下方「撰写要点」，禁用写法见「撰写禁忌」 |
 | 加载后验证 | 可直接复制执行的验证命令 + SOC 日志过滤字段 + 生效时延说明 |
 | 使用建议与注意事项 | 误报风险、SEO/业务影响、观察上线建议、白名单配合方式 |
 | 验证记录 | 测试环境用例数与通过情况 |
 
-拉取方加载入口（文档中方式一的标准写法）：用户在 IDE 中对 AI 说「从 Hub 拉取 {username}/{name} 策略，发布到我的 WAF」，AI 执行 `hub pull` → `rule web create --params`（dry-run）→ 用户确认 → `--apply`。
+#### 「如何加载」撰写要点
+
+- **方式一（固定为 jxwaf-agent 拉取并发布）**：示例话术「从 Hub 拉取 {username}/{name} 策略，发布到我的 WAF」，随后写 AI 闭环步骤：`hub-load`（dry-run 预览）→ 人工确认 → `--apply` → 可选流量验证；注明后端直接从 hub.jxwaf.com 拉取、无需本地中转。命令按策略资源类型写，如 Web 规则类 `rule web hub-load --params '{"hub_repo":"{username}/{name}","force_load":"false"}'`
+- **方式二（控制台远程导入）**：入口按钮随资源类型、三版本一致——Web 规则类=Web 防护规则页「导入远程规则」，流量规则/白名单/防篡改/缓存策略等=各自页面同名「导入远程规则」，组件类=防护组件页「**导入远程组件**」。字段统一：远程地址=`用户名/策略名`、API Key=私有策略才填、强行导入默认关——关闭时同名规则整个导入报错失败不做变更，开启时逐条先删后插覆盖。该方式下加一条注释区分本地/远程导入：控制台「导入规则/组件」与「导入远程规则/组件」按钮并排易混淆——前者期望 backup 导出的数组格式 `[{rule_name,...}]`（同名跳过，CLI 对应 `rule web load --params '{"rules":[...]}'`），后者走 Hub 拉取
+- **方式三（控制台手工粘贴）**：字段对照表 + 完整原文。字段值一律引导用户切换到**本页**「策略内容」标签页复制（readme 就渲染在 Hub 策略页上）：控制台表单的全部字段如组件的 name/detail/code/conf 均可原样复制，`code` 为 base64 原样粘贴勿解码
+
+#### 撰写禁忌（内部约定，不写入 readme）
+
+- 方式三不得写「先打开 Hub 策略页 URL」之类的循环引导——读者已在策略页上，字段值一律引导其切换到本页「策略内容」标签页取
+- readme 不写 json_content 包装格式——加载方经 hub-load 自动消费，原始格式属发布方知识（见上文 push 格式规则）
 
 ## 典型工作流
 

@@ -2,7 +2,6 @@
 .jxwaf/
 
 # CLI 产物
-jxwaf-cli
 output/
 
 

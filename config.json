@@ -13,7 +13,7 @@
   },
   "hub": {
     "base_url": "https://hub.jxwaf.com",
-    "api_token": "",
+    "api_token": "UftZWP71CiLmK1MCPonY1g37oaKts5PtfitjuW0z__o=",
     "default_product": "jxwaf",
     "default_scene": "应用安全"
   }

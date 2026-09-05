@@ -17,8 +17,20 @@ func TestValidateHubPolicyContent(t *testing.T) {
 			data: `{"web_rule_protection_data":{"block_crawler_ua":{"rule_name":"block_crawler_ua","rule_action":"block"}}}`,
 		},
 		{
-			name: "多条目包装",
-			data: `{"component_data":{"a":{"name":"a"},"b":{"name":"b"}}}`,
+			name: "多条目包装（component_data 全字段，对齐 hub-export 导出结构）",
+			data: `{"component_data":{"a":{"name":"a","detail":"d","code":"c","conf":"{}","status":"true","rule_order_time":"1720000000"},"b":{"name":"b","detail":"d","code":"c","conf":"{}","status":"false","rule_order_time":"1720000001"}}}`,
+		},
+		{
+			name:    "component_data 缺 status/rule_order_time（控制台拼 SQL 会报 near ',)'）",
+			data:    `{"component_data":{"cc_seq_dynamic_content":{"name":"cc_seq_dynamic_content","detail":"d","code":"c","conf":"{}"}}}`,
+			wantErr: true,
+			errText: "缺少控制台入库必需字段",
+		},
+		{
+			name:    "component_data 缺 rule_order_time",
+			data:    `{"component_data":{"a":{"name":"a","detail":"d","code":"c","conf":"{}","status":"true"}}}`,
+			wantErr: true,
+			errText: "缺少控制台入库必需字段",
 		},
 		{
 			name:    "扁平单规则对象（控制台加载会报 _data is nil）",

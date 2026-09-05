@@ -21,9 +21,15 @@ var (
 	hubNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$`)
 )
 
+// hubComponentRequiredFields 对齐控制台 export_component_hub_config 导出的权威结构。
+// load_component_hub_config 对 component_data 条目不补全字段、直接拼 SQL 入库，
+// 缺失 status/rule_order_time 会导致 SQL 语法错误（near ',)'）。
+var hubComponentRequiredFields = []string{"name", "detail", "code", "conf", "status", "rule_order_time"}
+
 // validateHubPolicyContent 校验策略内容为控制台 hub-load 可消费的包装结构：
 // {"<资源>_data": {"<名称>": {配置字段...}}}（对齐三版本 admin_server load_*_hub_config 读取 res_body['xxx_data'] 的行为）。
 // 扁平单规则对象（如直接放 rule_name/rule_matchs）会导致控制台加载报 "<xxx>_data is nil"，本地快速失败并给出修正指引。
+// 条目级字段完整性：控制台 load 函数不补全字段，缺失必填字段会拼出非法 SQL，本地也一并拦截。
 func validateHubPolicyContent(data []byte) error {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(data, &obj); err != nil {
@@ -41,6 +47,18 @@ func validateHubPolicyContent(data []byte) error {
 			var cfgObj map[string]json.RawMessage
 			if err := json.Unmarshal(cfg, &cfgObj); err != nil {
 				return fmt.Errorf("包装键 %s 下的 %s 需为配置对象（控制台导出格式：{\"名称\": {字段...}}）", k, item)
+			}
+			if k == "component_data" {
+				var missing []string
+				for _, f := range hubComponentRequiredFields {
+					if _, ok := cfgObj[f]; !ok {
+						missing = append(missing, f)
+					}
+				}
+				if len(missing) > 0 {
+					return fmt.Errorf("包装键 component_data 下的 %s 缺少控制台入库必需字段 %v（对齐控制台导出结构 name/detail/code/conf/status/rule_order_time）；"+
+						"缺失字段会导致 load_component_hub_config 拼 SQL 报语法错误，可用 component hub-export 导出真实结构对照", item, missing)
+				}
 			}
 		}
 		return nil
