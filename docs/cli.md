@@ -21,7 +21,7 @@ CLI 配置（环境、凭据、测试环境地址）从**项目目录下的 `con
 
 **`config.json` 含凭据，已加入 `.gitignore`，严禁提交到仓库。**
 
-**CLI 无任何内置默认环境**：`config.json` 缺失或为空时命令直接报错，要求先配置（测试环境 `test init`，自有环境 `config set`）。
+**CLI 代码不写死任何环境参数**：`config.json` 缺失或为空时命令直接报错，要求先配置（测试环境 `test init`，自有环境 `config set`）。**官方测试环境（专业版，waf-demo）已配置好**（项目 `config.json` 的 `test` 环境），开箱即用。
 
 配置文件结构（节选）：
 
@@ -47,7 +47,7 @@ CLI 配置（环境、凭据、测试环境地址）从**项目目录下的 `con
 
 ### `jxwaf-cli test init`
 
-配置**测试环境**（项目目录 `config.json`，权限 0600）。测试环境**无内置默认值**：使用 `test` 命令组前必须先初始化，否则命令直接报错。
+配置**测试环境**（项目目录 `config.json`，权限 0600）。**官方测试环境（专业版，waf-demo）已配置好**（`test` 环境），`test` 命令组可直接使用；`test init` 用于自建测试环境或 config.json 丢失后重新配置（CLI 代码不写死环境参数，config.json 缺失/为空时命令直接报错）。
 
 ```
 jxwaf-cli test init --base-url URL --waf-auth AUTH --test-url URL [--name ENV] [--group-name G]
@@ -186,7 +186,7 @@ jxwaf-cli test cleanup --type web-rule|flow-rule|web-white|flow-white|tamper|nam
 jxwaf-cli test reset [--apply]
 ```
 
-- 测试环境无内置默认值：使用前必须先 `test init` 配置
+- 官方测试环境（专业版，waf-demo）已配置好（`config.json` 的 `test` 环境）；config.json 缺失/为空时命令报错，用 `test init` 重新配置
 - `test verify` 为**一键闭环**：清空基线 → 部署信封配置 → 打测试流量 → 查 SOC 日志 → 报告 → 清理本次配置（环境回到空态）。判定：`expect=block` 且状态码 403/444 → `blocked`；`expect=pass` 且非 403/444 → `passed`；否则 `unexpected`。watch 类规则返回 200，需结合 `soc_logs` 中 `waf_action` 判读（见 [verify.md](verify.md)）
   - `--no-fresh`：不清基线（连续调试）；`--keep`：验证后保留配置
   - `--url` 省略时取测试站点地址（配置下发到测试环境后访问它验证）：取值顺序 `--url` > 测试环境配置的 `test_url`

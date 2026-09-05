@@ -17,8 +17,8 @@ import (
 )
 
 // 测试环境：配置下发生产前的验证环境，独立命令组 `jxwaf-cli test`，与自有环境命令彻底分开。
-// 测试环境无内置默认值：必须经 test init 显式配置（--base-url / --waf-auth /
-// --test-url 必填，域名组留空自动发现），保存进项目目录 config.json。
+// 官方已提供共享测试环境（专业版），CLI 不写死其参数：必须经 test init 显式配置
+// （--base-url / --waf-auth / --test-url 必填，域名组留空自动发现），保存进项目目录 config.json。
 // test_url 为测试环境的测试站点地址（配置下发到测试环境后访问它验证规则生效），
 // 保存在测试环境定义中（environments.<test>.test_url）。
 
@@ -81,7 +81,7 @@ func newTestInitCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "init --base-url URL --waf-auth AUTH --test-url URL [--name ENV] [--group-name G]",
-		Short: "初始化测试环境（保存进项目目录 config.json；无内置默认值，使用前必须先初始化）",
+		Short: "初始化测试环境（保存进项目目录 config.json；官方测试环境已配置好，仅自建或重新配置时使用）",
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
 			envName = orDefault(envName, config.DefaultTestEnvName)
 			if baseURL == "" {

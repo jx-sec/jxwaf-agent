@@ -21,7 +21,7 @@ jxwaf-cli generate web-rule --params /tmp/rule.json --output /tmp/rule_cfg.json
 jxwaf-cli test verify /tmp/rule_cfg.json [--url https://test.example.com] [--wait 5]
 ```
 
-测试环境验证（`test verify`）自动完成全流程，结束时环境回到空态（测试环境无内置默认值，使用前需 `test init` 配置）。自有环境（标准版/专业版/自建云）使用通用 `verify --url`，只发流量出报告，**不会部署或清空任何配置**；通用 verify 无 --no-fresh/--keep 参数，需要分批手动时按 `apply --apply`（下发）→ `verify`（验证）→ `cleanup --apply`（清理）分开执行。
+测试环境验证（`test verify`）自动完成全流程，结束时环境回到空态（官方测试环境已在 `config.json` 配置好，开箱即用）。自有环境（标准版/专业版/自建云）使用通用 `verify --url`，只发流量出报告，**不会部署或清空任何配置**；通用 verify 无 --no-fresh/--keep 参数，需要分批手动时按 `apply --apply`（下发）→ `verify`（验证）→ `cleanup --apply`（清理）分开执行。
 
 > **同步时延**：节点每 3 秒从控制台拉取一次配置，部署后等待 5 秒（`--wait` 默认值）即可验证，**不要设置更长的等待**。若用例 `unexpected` 且确认配置已下发（list 查到且 status 开启），应排查匹配条件而非加大等待重试。
 

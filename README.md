@@ -6,14 +6,14 @@
 
 ## 环境前置条件（必读）
 
-CLI 按用途区分**测试环境**与**生产环境**两类，`config.json` 是唯一配置来源，**无任何内置默认值**——`config.json` 缺失或为空时命令直接报错，要求先完成配置：
+CLI 按用途区分**测试环境**与**生产环境**两类，`config.json` 是唯一配置来源，CLI 代码不写死任何环境参数——`config.json` 缺失或为空时命令直接报错，要求先完成配置：
 
 | 环境用途 | 配置方式 | 说明 |
 |---|---|---|
-| **测试环境**（配置下发生产前先验证） | `test init` | 需提供管理地址、凭据、测试站点（`--base-url` / `--waf-auth` / `--test-url` 必填，域名组留空自动发现） |
+| **测试环境**（配置下发生产前先验证） | 已配置好 | 官方提供的共享测试环境（专业版，waf-demo），已配置在项目 `config.json` 的 `test` 环境，开箱即用 |
 | **生产环境**（自有环境，防护正式生效） | `config set` | 标准版/专业版/自建云控制台，需控制台地址与 waf_auth；**需先开启控制台 Admin API（默认关闭）**，见下文 |
 
-> **无内置默认值**：CLI 不预置任何环境（地址、凭据、域名组、测试站点均需用户提供）。`config.json` 缺失或为空时报错并引导配置：测试环境用 `test init`，生产环境用 `config set`。
+> **官方测试环境**：官方已提供共享测试环境，且已在项目 `config.json` 中配置好（`test` 环境），`test verify` 可直接使用。CLI 代码不写死环境参数、不会自动生成配置——`config.json` 缺失或为空时命令直接报错，要求先配置（测试环境 `test init`，生产环境 `config set`）。
 
 环境隔离：`test` 命令组固定只操作测试环境（忽略 `--env`）；测试环境与生产环境共存于 `config.json`。
 
@@ -33,7 +33,7 @@ environment:
 
 配置文件为**项目目录下的 `config.json`**，与 jxwaf-cli 程序同级。测试站点地址（配置下发到测试环境后访问验证）保存在测试环境定义的 `test_url` 字段。
 
-测试环境接入（`--base-url` / `--waf-auth` / `--test-url` 必填，域名组留空自动发现）：
+官方测试环境已配置好（`config.json` 的 `test` 环境），`test verify` 可直接使用。自建测试环境或 config.json 丢失后重新配置时用 `test init`（`--base-url` / `--waf-auth` / `--test-url` 必填，域名组留空自动发现）：
 
 ```bash
 ./jxwaf-cli test init --base-url https://your-test-console \
