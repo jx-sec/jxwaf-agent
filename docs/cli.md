@@ -209,14 +209,14 @@ jxwaf-cli verify <用例文件> --url https://example.com [--wait 5]
 jxwaf-cli hub login --username U --password P [--otp-code 6位] [--base-url URL]     # 换取并保存 API Token（或环境变量 JXWAF_HUB_USERNAME/JXWAF_HUB_PASSWORD/JXWAF_HUB_OTP_CODE）
 jxwaf-cli hub init --token <API Token> [--base-url URL]                             # 手工配置 Token（网页「个人设置」页获取；或环境变量 JXWAF_HUB_TOKEN），保存前自动校验身份
 jxwaf-cli hub status                                                                # 配置与账号状态（Token 脱敏）
-jxwaf-cli hub push <file.json> --name <策略名> [--product jxwaf|webtds] [--scene 分类] [--public] [--private] [--description S] [--readme F.md] [--apply]
+jxwaf-cli hub push <file.json> --name <策略名> [--product jxwaf|webtds] [--scene 分类] [--public] [--private] [--description S] [--readme F.md]
 jxwaf-cli hub list [--page N] [--page-size N]                                       # 我的策略列表
 jxwaf-cli hub show <策略名>                                                         # 策略详情（含 json_content）
 jxwaf-cli hub pull <username/name> [-o file.json] [--product P]                     # 拉取最新内容（私有自动带 Token）
 jxwaf-cli hub delete <策略名> [--apply]                                             # 删除（硬删除不可恢复）
 ```
 
-- **upsert 语义**：策略名创建后不可修改；`push` 不存在则创建、存在则覆盖内容（平台无版本历史）。默认 dry-run 预览（含 create/update 动作判定），`--apply` 执行
+- **upsert 语义**：策略名创建后不可修改；`push` 不存在则创建、存在则覆盖内容（平台无版本历史）。默认私有属低风险操作，**直接执行无需二次确认**；仅 `--public` 公开前须确认策略 JSON 无敏感信息
 - **可选步骤**：`hub push` 仅在用户主动要求共享/发布时执行，AI 编排不主动建议、不进入默认工作流
 - **默认私有**：`--public` 公开前务必确认策略 JSON 无敏感信息（真实域名、源站 IP 等），公开即人人可见可拉取
 - 命名规则：小写字母/数字/中划线/下划线，3-100 字符，不能以中划线下划线开头结尾；`product` 枚举 `jxwaf/webtds`；`scene` 枚举 流量安全/应用安全/业务安全/功能组件/模型算法
@@ -247,7 +247,7 @@ jxwaf-cli hub delete <策略名> [--apply]                                      
 ```
 需求分析 → generate 生成 → apply 到测试环境(--apply) → verify 验证
 → 误报/漏报则改参数重试(≤3次) → cleanup 清理 → 用户确认 → 生产 --apply
-→ [可选,仅用户主动要求时] 用户确认 → hub push 发布到策略地址
+→ [可选,仅用户主动要求时] hub push 发布到策略地址
 ```
 
 安全规范与红线见 [sop.md](sop.md)；三版本能力差异见 [versions.md](versions.md)；误报/漏报排查与调优见 [playbook.md](playbook.md)；可复用配置模式见 [profiles.md](profiles.md)；日志分析与报表配方见 [analysis.md](analysis.md)。

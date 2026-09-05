@@ -70,7 +70,7 @@ jxwaf-cli rule|white|tamper|ssl|group|namelist|component|website|soc|network|mon
 
 - **环境就绪检查（第一步，必须）**：先跑 `jxwaf-cli config show` 确认 `config.json` 就绪（CLI 不写死参数：官方测试环境已配置在 `config.json` 的 `test` 环境；自有环境需 `config set` 配置；未配置时相应命令直接报错）。自有环境未配置时**提醒用户先 `config set` 并终止流程**，不进入 generate/apply/verify 环节；测试环境未配置时提醒用户先 `test init`；已配置用 `config validate` 确认连通性。自有环境报 "admin api is not enabled" / "ip not allowed" 时，提醒用户按 README 环境前置条件修改控制台 docker-compose（`ADMIN_API_ENABLE: "true"` + `ADMIN_API_WHITELIST: "*"`，生产环境可收紧为固定 IP）并重启容器
 - 官方测试环境已配置好（`config.json` 的 `test` 环境）；config.json 丢失或自建测试环境时用 `jxwaf-cli test init` 重新配置；测试环境操作统一走 `test` 命令组（verify/cleanup/reset），默认环境 test，与 active 无关
-- **策略共享（hub 命令组，可选步骤）**：仅当用户主动要求发布/共享策略时才执行 `hub push`，不主动建议、不进入默认工作流。push 默认 dry-run，用户确认后 `--apply`（upsert 覆盖语义，策略名创建后不可改）；默认私有，`--public` 公开前必须确认策略 JSON 无敏感信息（真实域名/源站 IP）。`--scene` 由 AI 按策略实际类型显式指定（如缓存/限频/CC 类=流量安全，Web 攻击规则=应用安全，组件=功能组件），不要依赖默认值兜底。首次使用时引导用户 `hub login` 换取 API Token（密码不落盘），或 `hub init --token`（Hub 网页「个人设置」页复制 Token）。详见 docs/cli.md
+- **策略共享（hub 命令组，可选步骤）**：仅当用户主动要求发布/共享策略时才执行 `hub push`，不主动建议、不进入默认工作流。push 默认私有、属低风险操作，直接执行无需二次确认（upsert 覆盖语义，策略名创建后不可改）；仅 `--public` 公开前必须确认策略 JSON 无敏感信息（真实域名/源站 IP）。`--scene` 由 AI 按策略实际类型显式指定（如缓存/限频/CC 类=流量安全，Web 攻击规则=应用安全，组件=功能组件），不要依赖默认值兜底。首次使用时引导用户 `hub login` 换取 API Token（密码不落盘），或 `hub init --token`（Hub 网页「个人设置」页复制 Token）。详见 docs/cli.md
 - **文档优先级**：以本地 `docs/` 为主；有冲突或错误、或拿不准的字段，再从 docs.jxwaf.com 获取最新（按版本分站，部署看各站 Deployment-Tutorial），以官方为准
 
 ## 文档索引

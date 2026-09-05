@@ -279,7 +279,7 @@ func newHubStatusCmd() *cobra.Command {
 	}
 }
 
-// newHubPushCmd 上传/覆盖策略（upsert：不存在创建，存在则覆盖内容）。默认 dry-run，--apply 执行。
+// newHubPushCmd 上传/覆盖策略（upsert：不存在创建，存在则覆盖内容）。默认私有、直接执行，无需二次确认。
 func newHubPushCmd() *cobra.Command {
 	var (
 		name        string
@@ -292,7 +292,7 @@ func newHubPushCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "push <file.json> --name <策略名>",
-		Short: "上传策略到 Hub（默认 dry-run 预览，--apply 执行；存在则覆盖，公开策略注意敏感信息）",
+		Short: "上传策略到 Hub（默认私有直接执行；存在则覆盖，公开策略注意敏感信息）",
 		Args:  cobra.ExactArgs(1),
 		RunE: runE(func(cmd *cobra.Command, args []string) (any, error) {
 			if publicFlag && privateFlag {
@@ -348,21 +348,6 @@ func newHubPushCmd() *cobra.Command {
 				isPrivate = true
 			}
 
-			apply, _ := cmd.Flags().GetBool("apply")
-			if !apply {
-				visibility := "私有"
-				if publicFlag {
-					visibility = "公开（任何人可见，请确认内容无敏感信息）"
-				}
-				return map[string]any{
-					"dry_run": true, "action": map[bool]string{true: "create", false: "update"}[!exists],
-					"name": name, "product": product, "scene": scene,
-					"visibility": visibility, "description": description,
-					"json_bytes": len(jsonContent),
-					"hint":       "预览未执行；确认后使用 --apply 实际执行",
-				}, nil
-			}
-
 			if !exists {
 				out, err := hc.CreatePolicy(name, product, scene, isPrivate, description, readme, jsonContent)
 				if err != nil {
@@ -408,7 +393,6 @@ func newHubPushCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&privateFlag, "private", false, "设为私有策略（更新时可用，默认不变更）")
 	cmd.Flags().StringVar(&description, "description", "", "简述（可选，最多 500 字）")
 	cmd.Flags().StringVar(&readmePath, "readme", "", "详细说明 Markdown 文件路径（可选）")
-	cmd.Flags().Bool("apply", false, "实际执行（默认 dry-run 仅预览）")
 	return cmd
 }
 
