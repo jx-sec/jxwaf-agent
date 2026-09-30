@@ -1,7 +1,14 @@
 {
-  "active": "",
+  "active": "prod",
   "test_env": "test",
   "environments": {
+    "prod": {
+      "name": "prod",
+      "version": "professional",
+      "base_url": "http://162.128.72.231",
+      "waf_auth": "736f2e1d-bdcc-4dca-92d6-21681f85af55",
+      "group_name": "prod"
+    },
     "test": {
       "name": "test",
       "version": "professional",
@@ -13,7 +20,7 @@
   },
   "hub": {
     "base_url": "https://hub.jxwaf.com",
-    "api_token": "UftZWP71CiLmK1MCPonY1g37oaKts5PtfitjuW0z__o=",
+    "api_token": "iw3i9ybwCEg36z9fNE2MbOIgWU3eRC9h92rFPcPJlJw=",
     "default_product": "jxwaf",
     "default_scene": "应用安全"
   }
